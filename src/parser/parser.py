@@ -17,6 +17,8 @@ def parser_args():
     parser.add_argument("--num_classes", help="num of classes in the dataset (default: 10)", default=10)
     parser.add_argument("--sentence_encoder", help="sentence encoder model name for multimodal JEPA (default: all-MiniLM-L6-v2)", default="sentence-transformers/all-MiniLM-L6-v2")
     parser.add_argument("--multimodal_run", help="run model in multimodal mode (default: y)", default="y")
+    parser.add_argument("--patch_size", help="patch size in pixels used when processing images (default: 16)", default=16)
+    parser.add_argument("--debug", help="run training in debug mode (default: y)", default="y")
 
     args = parser.parse_args()
 
