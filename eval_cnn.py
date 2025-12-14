@@ -113,6 +113,8 @@ def show_lenet_loss(loss_list: list):
 acc_list = []
 loss_list = []
 
+print(f"starting training LeNet CNN model with: {sum(p.numel() for p in model.parameters())}")
+
 for i in range(20):
     running_acc, running_loss = train()
     acc_list.append(running_acc)
