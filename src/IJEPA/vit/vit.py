@@ -1,49 +1,18 @@
 import torch.nn as nn
 import torch
-import copy
-import json
-from typing import Any
 from src.IJEPA.mask.masking import apply_mask
-from transformers import AutoTokenizer, AutoModelForCausalLM
-
-file = open("././parameters.json")
-
-param_file = json.load(file)
-
-parameters: dict[str, Any] = param_file["ijepa"]
-parameters_llm: dict[str, Any] = param_file["llmjepa"]
-parameters_mm: dict[str, Any] = param_file["multimodal"]
-
-DEBUG = parameters_mm["DEBUG"]
-
-text_encoder = AutoModelForCausalLM.from_pretrained(parameters_llm["MODEL_NAME"])
-tokenizer = AutoTokenizer.from_pretrained(parameters_llm["MODEL_NAME"])
-
-if tokenizer.pad_token is None:
-    tokenizer.pad_token = tokenizer.eos_token
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
 ## hyperparameters
 
-DEPTH = parameters["DEPTH"]
-DROP_RATE = parameters["DROP_RATE"]
-BATCH_SIZE = parameters["BATCH_SIZE"]
-CHANNELS = parameters["CHANNELS"]
-EMBED_DIM = parameters["EMBED_DIM"]
-IMG_SIZE = parameters["IMAGE_SIZE"]
-PATCH_SIZE = parameters["PATCH_SIZE"]
-MLP_DIM = parameters["MLP_DIM"]
-NUM_HEADS = parameters["NUM_HEADS"]
-EPOCHS = parameters["EPOCHS"]
-NUM_CLASSES = parameters["NUM_CLASSES"]
-
 class ViTPredictor(nn.Module):
 
-    def __init__(self, num_patches, embed_dim=EMBED_DIM, pred_dim=None, depth=DEPTH, num_heads=NUM_HEADS, drop_rate=0.1, init_std=0.02):
+    def __init__(self, num_patches, embed_dim=256, pred_dim=None, depth=6, num_heads=8, drop_rate=0.1, init_std=0.02, num_classes=10, tokenizer=None, text_encoder=None):
         super().__init__()
         if pred_dim is None:
             pred_dim = embed_dim
+
         self.predictor_embed = nn.Linear(embed_dim, pred_dim, bias=True)
         self.mask_token = nn.Parameter(torch.zeros(1, 1, pred_dim)) # learnable parameters to predict masked region
 
@@ -53,7 +22,7 @@ class ViTPredictor(nn.Module):
             TransformerEncoder(
                 num_heads=num_heads,
                 embed_dim=pred_dim,
-                mlp_dim=MLP_DIM,
+                mlp_dim=512,
                 drop=drop_rate
             )
             for _ in range(depth)
@@ -67,7 +36,7 @@ class ViTPredictor(nn.Module):
         )
 
         self.cls_fc1 = nn.Linear(embed_dim, embed_dim // 2)
-        self.cls_fc2 = nn.Linear(embed_dim // 2, NUM_CLASSES)
+        self.cls_fc2 = nn.Linear(embed_dim // 2, num_classes)
 
         nn.init.xavier_uniform_(self.cls_fc1.weight)
         nn.init.zeros_(self.cls_fc1.bias)
@@ -86,6 +55,9 @@ class ViTPredictor(nn.Module):
         self.init_std = init_std
         self.predictor_norm = nn.LayerNorm(pred_dim)
         self.predictor_proj = nn.Linear(pred_dim, embed_dim) # back to encoder dimension
+
+        self.tokenizer = tokenizer
+        self.text_encoder = text_encoder
 
     def forward(self, x, context_mask, target_mask, labels: torch.Tensor, multimodal: bool, return_cls_only = False):
 
@@ -119,9 +91,9 @@ class ViTPredictor(nn.Module):
             
             label_list = [f"a photo of class: {label}" for label in labels]
 
-            label_tokens = tokenizer(label_list, return_tensors='pt', padding=True)
+            label_tokens = self.tokenizer(label_list, return_tensors='pt', padding=True)
             
-            enc_labels = text_encoder(**label_tokens, output_hidden_states=True)
+            enc_labels = self.text_encoder(**label_tokens, output_hidden_states=True)
 
             enc_labels = enc_labels.hidden_states[-1]
 
@@ -165,7 +137,7 @@ class MLP(nn.Module):
     
 class PatchEmbed(nn.Module):
     
-    def __init__(self, img_size=224, patch_size=16, in_chans=3, embed_dim=EMBED_DIM):
+    def __init__(self, img_size=224, patch_size=16, in_chans=3, embed_dim=256):
         super().__init__()
         self.img_size = img_size
         self.embed_dim = embed_dim
@@ -233,18 +205,3 @@ class VisionTransformer(nn.Module):
         x = self.norm(x)
         
         return x
-    
-
-teacher_model = VisionTransformer(
-    img_size=IMG_SIZE,
-    patch_size=PATCH_SIZE,
-    in_chans=CHANNELS,
-    embed_dim=EMBED_DIM,
-    num_heads=NUM_HEADS,
-    depth=DEPTH,
-    mlp_dim=MLP_DIM,
-    drop_rate=DROP_RATE,
-    num_classes=10
-)
-
-student_model = copy.deepcopy(teacher_model)
