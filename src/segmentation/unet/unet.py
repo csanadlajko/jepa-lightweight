@@ -54,7 +54,7 @@ class UNet(nn.Module):
         # encoder
         xe11 = relu(self.enc11(x))
         xe12 = relu(self.enc12(xe11))
-        xpool1 = self.pool(xe12)
+        xpool1 = self.pool1(xe12)
 
         xe21 = relu(self.enc21(xpool1))
         xe22 = relu(self.enc22(xe21))
@@ -66,7 +66,7 @@ class UNet(nn.Module):
 
         xe41 = relu(self.enc41(xpool3))
         xe42 = relu(self.enc42(xe41))
-        xpool4 = self.pool(xe42)
+        xpool4 = self.pool4(xe42)
 
         xe51 = relu(self.enc51(xpool4))
         xe52 = relu(self.enc52(xe51))
@@ -89,7 +89,7 @@ class UNet(nn.Module):
         xd32 = relu(self.dec32(xd31))
 
         xu4 = self.upconv4(xd32)
-        xu44 = torch.cat([xu4, xe42], dim=1)
+        xu44 = torch.cat([xu4, xe12], dim=1)
         xd41 = relu(self.dec41(xu44))
         xd42 = relu(self.dec42(xd41))
 
