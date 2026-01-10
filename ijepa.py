@@ -100,7 +100,7 @@ if __name__ == "__main__":
         loss_epoch = train(
             teacher_model, 
             student_model, 
-            mri_train_loader, 
+            train_loader, 
             model_config["optim_student"],
             model_config["optim_predictor"],
             predictor,
@@ -122,7 +122,7 @@ if __name__ == "__main__":
     for epoch in range(args.epochs):
         cls_loss_at_epoch, accuracy_epoch = train_cls(
             student_model, 
-            mri_train_loader, 
+            train_loader, 
             predictor,
             model_config["optim_cls"],
             model_config["cls_loss"],
@@ -138,7 +138,7 @@ if __name__ == "__main__":
 
     print("\n=== FINAL EVALUATION ===")
     
-    cls_acc = eval_cls(student_model, mri_test_loader, predictor, args.multimodal_run)
+    cls_acc = eval_cls(student_model, test_loader, predictor, args.multimodal_run)
 
     show_loss_per_epoch(jepa_loss_per_epoch, cls_loss_per_epoch)
     show_cls_data_per_epoch(accuracy_per_epoch)
