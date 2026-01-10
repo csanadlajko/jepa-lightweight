@@ -124,6 +124,7 @@ class Mask(object):
             target_mask = []
             for _ in range(self.ntarg):
                 idx, occ = self._place_block_without_overlap(target_h, target_w, occ)
+                idx = idx.to(device)
                 target_mask.append(idx)
             
             free = (occ == 0).to(torch.int32)
@@ -175,6 +176,7 @@ class Mask(object):
                 needed -= take
                     
             all_mask_target.append(target_mask)
+            cmask = cmask.to(device)
             all_mask_ctx.append(cmask)
             
         if id_only:

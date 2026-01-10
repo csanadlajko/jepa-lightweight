@@ -7,7 +7,7 @@ from src.IJEPA.train.train_ijepa import (
     show_loss_per_epoch, # cls loss plot
     eval_cls # cls evalutaion on the test dataset
 )
-from src.IJEPA.transform.datatransform import train_loader, test_loader, mri_train_loader, mri_test_loader
+from src.IJEPA.transform.datatransform import get_cifar_tendotone_dataset, get_cifarten_dataset, get_mri_dataset
 from src.IJEPA.config_ijepa import get_model_config
 from transformers import AutoTokenizer, AutoModelForCausalLM
 import torch
@@ -28,14 +28,38 @@ def init_weights(m):
         torch.nn.init.ones_(m.weight)
         torch.nn.init.zeros_(m.bias)
 
+def get_dataset(dataset_name: str, input_folder: str = ""):
+    datasets = {}
+    if dataset_name == "cifar10":
+        train_loader, test_loader = get_cifarten_dataset()
+        datasets["train_loader"] = train_loader
+        datasets["test_loader"] = test_loader
+    elif dataset_name == "cifar10dot1":
+        train_loader, test_loader = get_cifar_tendotone_dataset(input_folder)
+        datasets["train_loader"] = train_loader
+        datasets["test_loader"] = test_loader
+    elif dataset_name == "mri":
+        train_loader, test_loader = get_mri_dataset(input_folder)
+        datasets["train_loader"] = train_loader
+        datasets["test_loader"] = test_loader
+    else:
+        datasets["error"] = "Dataset has not been registered yet for JEPA model!"
+    return datasets
+
 if __name__ == "__main__":
     jepa_loss_per_epoch = []
     accuracy_per_epoch = []
     cls_loss_per_epoch = []
 
-    print(args)
-
     run_identifier: str = datetime.datetime.now().strftime("%Y-%m-%dT%H%M%SZ")
+    result_folder: str = args.result_folder
+
+    datasets = get_dataset(args.dataset, args.dataset_input)
+
+    if "error" in datasets:
+        raise FileNotFoundError(datasets["error"])
+
+    train_loader, test_loader = datasets["train_loader"], datasets["test_loader"]
 
     teacher_model = VisionTransformer(
         img_size=args.image_size,
@@ -114,9 +138,9 @@ if __name__ == "__main__":
         jepa_loss_per_epoch.append(loss_epoch)
     
     if args.debug == "y":
-        torch.save(student_model.state_dict(), f"trained_student_jepa_{run_identifier}.pth")
-        torch.save(teacher_model.state_dict(), f"teacher_model_jepa_{run_identifier}.pth")
-        torch.save(predictor.state_dict(), f"trained_predictor_jepa_{run_identifier}.pth")
+        torch.save(student_model.state_dict(), f"/{result_folder}/trained_student_jepa_{run_identifier}.pth")
+        torch.save(teacher_model.state_dict(), f"/{result_folder}/teacher_model_jepa_{run_identifier}.pth")
+        torch.save(predictor.state_dict(), f"/{result_folder}/trained_predictor_jepa_{run_identifier}.pth")
 
 
     for epoch in range(args.epochs):
@@ -132,14 +156,14 @@ if __name__ == "__main__":
         cls_loss_per_epoch.append(cls_loss_at_epoch)
     
     if args.debug == "y":
-        torch.save(student_model.state_dict(), f"trained_student_cls_{run_identifier}.pth")
-        torch.save(teacher_model.state_dict(), f"teacher_model_cls_{run_identifier}.pth")
-        torch.save(predictor.state_dict(), f"trained_predictor_cls_{run_identifier}.pth")
+        torch.save(student_model.state_dict(), f"/{result_folder}/trained_student_cls_{run_identifier}.pth")
+        torch.save(teacher_model.state_dict(), f"/{result_folder}/teacher_model_cls_{run_identifier}.pth")
+        torch.save(predictor.state_dict(), f"/{result_folder}/trained_predictor_cls_{run_identifier}.pth")
 
     print("\n=== FINAL EVALUATION ===")
     
     cls_acc = eval_cls(student_model, test_loader, predictor, args.multimodal_run)
 
-    show_loss_per_epoch(jepa_loss_per_epoch, cls_loss_per_epoch)
-    show_cls_data_per_epoch(accuracy_per_epoch)
+    show_loss_per_epoch(jepa_loss_per_epoch, cls_loss_per_epoch, result_folder)
+    show_cls_data_per_epoch(accuracy_per_epoch, result_folder)
     print(f"-- CLS token classification accuracy: {cls_acc:.4f}")

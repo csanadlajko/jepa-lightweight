@@ -91,7 +91,9 @@ class ViTPredictor(nn.Module):
             
             label_list = [f"a photo of class: {label}" for label in labels]
 
-            label_tokens = self.tokenizer(label_list, return_tensors='pt', padding=True)
+            label_tokens: dict[str, torch.Tensor] = self.tokenizer(label_list, return_tensors='pt', padding=True)
+
+            label_tokens = {k: v.to(device) for k, v in label_tokens.items()}
             
             enc_labels = self.text_encoder(**label_tokens, output_hidden_states=True)
 
@@ -111,8 +113,10 @@ class ViTPredictor(nn.Module):
             predicted_tokens = predicted_tokens + pred_attended
 
             if return_cls_only:
-                full_img = torch.cat([x[:context_tokens_repeated.size(1)], predicted_tokens], dim=1) ## create new total image embedding with finetuned target predictions
-                cls_token = full_img[:, 0, :] # acquire cls token representing predicted image
+                # full_img = torch.cat([x[:context_length], predicted_tokens], dim=1) ## create new total image embedding with finetuned target predictions -> not neccesary
+                # we only use the multimodal approach to the predicted target tokens, these do not affect the cls
+                # cls only learns the finetuned embedding by the multimodal learning iterations
+                cls_token = x[:, 0, :] # acquire cls token representing predicted image
                 return self.cls_head(cls_token)
         
         return predicted_tokens

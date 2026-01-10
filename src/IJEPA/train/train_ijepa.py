@@ -48,8 +48,8 @@ def train(teacher_mod,
         
         student_tokens = student_mod(images, context_masks)
 
-        if debug == "y":
-            make_dot(student_tokens, params=dict(student_mod.named_parameters())).render(filename="model_vis", directory="results", format="png")
+        # if debug == "y":
+        #     make_dot(student_tokens, params=dict(student_mod.named_parameters())).render(filename="model_vis", directory="results", format="png")
 
         predicted_target_tokens = predictor(student_tokens, context_masks, target_masks, labels, multimodal, return_cls_only=False)
         
@@ -172,7 +172,7 @@ def eval_cls(model,
     print(f"Final CLS accuracy: {final_accuracy:.4f}")
     return final_accuracy
 
-def show_loss_per_epoch(jepa_loss_epoch_list: list[int], cls_loss_per_epoch: list[int], run_id: str):
+def show_loss_per_epoch(jepa_loss_epoch_list: list[int], cls_loss_per_epoch: list[int], run_id: str, result_folder: str):
     epoch_list = range(1, len(jepa_loss_epoch_list) + 1)
     plt.figure(figsize=(8,5))
     plt.plot(epoch_list, jepa_loss_epoch_list, label="MSE loss per JEPA epoch")
@@ -182,10 +182,10 @@ def show_loss_per_epoch(jepa_loss_epoch_list: list[int], cls_loss_per_epoch: lis
     plt.title('Loss over epochs')
     plt.legend()
     plt.grid(True)
-    plt.savefig(f'jepa_loss_plot_{run_id}.png', dpi=500)
+    plt.savefig(f'/{result_folder}/jepa_loss_plot_{run_id}.png', dpi=500)
     plt.show()
 
-def show_cls_data_per_epoch(accuracy_per_epoch: list[int], run_id: str):
+def show_cls_data_per_epoch(accuracy_per_epoch: list[int], run_id: str, result_folder: str):
     epoch_list = range(1, len(accuracy_per_epoch) + 1)
     plt.figure(figsize=(8,5))
     plt.plot(epoch_list, accuracy_per_epoch, label="Accuracy per epoch")
@@ -194,5 +194,5 @@ def show_cls_data_per_epoch(accuracy_per_epoch: list[int], run_id: str):
     plt.title("CLS accuracy per epoch (%)")
     plt.legend()
     plt.grid(True)
-    plt.savefig(f'cls_accuracy_plot_{run_id}.png', dpi=300)
+    plt.savefig(f'/{result_folder}/cls_accuracy_plot_{run_id}.png', dpi=300)
     plt.show()
