@@ -164,6 +164,6 @@ if __name__ == "__main__":
     
     cls_acc = eval_cls(student_model, test_loader, predictor, args.multimodal_run)
 
-    show_loss_per_epoch(jepa_loss_per_epoch, cls_loss_per_epoch, result_folder)
-    show_cls_data_per_epoch(accuracy_per_epoch, result_folder)
+    show_loss_per_epoch(jepa_loss_per_epoch, cls_loss_per_epoch, run_identifier, result_folder)
+    show_cls_data_per_epoch(accuracy_per_epoch, run_identifier, result_folder)
     print(f"-- CLS token classification accuracy: {cls_acc:.4f}")
