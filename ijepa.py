@@ -144,6 +144,7 @@ if __name__ == "__main__":
 
 
     for epoch in range(args.epochs):
+        print(f"\n=== CLS EPOCH {epoch+1}/{args.epochs} ===")
         cls_loss_at_epoch, accuracy_epoch = train_cls(
             student_model, 
             train_loader, 

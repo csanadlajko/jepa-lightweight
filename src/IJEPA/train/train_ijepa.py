@@ -121,7 +121,7 @@ def train_cls(student_model,
         total_loss += loss.item()
         num_batches += 1
 
-        if batch_idx % 100 == 0:
+        if batch_idx % 500 == 0:
             current_acc = correct_predictions / total_predictions
             print(f"CLS Loss at batch {batch_idx}: {loss.item():.4f}, Accuracy: {current_acc:.4f}")
 
