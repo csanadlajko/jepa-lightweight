@@ -2,8 +2,10 @@ import torch
 import matplotlib.pyplot as plt
 import numpy as np
 from src.IJEPA.mask.masking import Mask, apply_mask
-from src.IJEPA.transform.datatransform import train_loader
+from src.IJEPA.transform.datatransform import get_cifarten_dataset
 import json
+
+train_loader, test_loader = get_cifarten_dataset()
 
 file = open("parameters.json")
 parameters = json.load(file)["ijepa"]
