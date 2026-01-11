@@ -3,19 +3,22 @@ import torch.nn as nn
 
 def get_model_config(student_model, predictor, learning_rate, epochs):
 
-    optim_student = torch.optim.Adam(
+    optim_student = torch.optim.AdamW(
         student_model.parameters(),
-        lr=learning_rate
+        lr=learning_rate,
+        weight_decay=0.05
     )
 
-    optim_predictor = torch.optim.Adam(
+    optim_predictor = torch.optim.AdamW(
         predictor.parameters(),
-        lr=learning_rate
+        lr=learning_rate,
+        weight_decay=0.05
     )
 
-    optim_cls = torch.optim.Adam(
+    optim_cls = torch.optim.AdamW(
         predictor.parameters(),
-        lr=learning_rate
+        lr=learning_rate,
+        weight_decay=0.05
     )
 
     student_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
