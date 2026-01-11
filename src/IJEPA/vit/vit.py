@@ -1,6 +1,7 @@
 import torch.nn as nn
 import torch
 from src.IJEPA.mask.masking import apply_mask
+from src.IJEPA.utils.pos_encoding import sinusoidal_pos_embedding2d
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -14,9 +15,9 @@ class ViTPredictor(nn.Module):
             pred_dim = embed_dim
 
         self.predictor_embed = nn.Linear(embed_dim, pred_dim, bias=True)
-        self.mask_token = nn.Parameter(torch.zeros(1, 1, pred_dim)) # learnable parameters to predict masked region
+        self.mask_token = nn.Parameter(torch.zeros(1, 1, pred_dim), requires_grad=True) # learnable parameters to predict masked region
 
-        self.pred_pos_embed = nn.Parameter(torch.zeros(1, num_patches + 1, pred_dim), requires_grad=False)
+        self.pred_pos_embed = sinusoidal_pos_embedding2d(num_patches, embed_dim)
 
         self.pred_blocks = nn.Sequential(*[
             TransformerEncoder(
@@ -60,12 +61,14 @@ class ViTPredictor(nn.Module):
         self.text_encoder = text_encoder
 
     def forward(self, x, context_mask, target_mask, labels: torch.Tensor, multimodal: bool, return_cls_only = False):
+        ## x includes cls token on index 0
 
         B = x.size(0)
         
         x = self.predictor_embed(x)
         
-        target_positions = apply_mask(self.pred_pos_embed.repeat(B, 1, 1), target_mask)
+        ## select target positions excluding the cls token
+        target_positions = apply_mask(self.pred_pos_embed.repeat(B, 1, 1), target_mask, predictor=True)
 
         num_target_tokens = target_positions.size(1)
         mask_tokens = self.mask_token.repeat(target_positions.size(0), num_target_tokens, 1)
@@ -149,15 +152,14 @@ class PatchEmbed(nn.Module):
         self.patch_size = patch_size
         self.num_patches = (img_size // patch_size) ** 2
         self.proj = nn.Conv2d(in_chans, embed_dim, kernel_size=patch_size, stride=patch_size)
-        self.cls_token = nn.Parameter(torch.randn(1, 1, embed_dim))
-        self.pos_embed = nn.Parameter(torch.zeros(1, self.num_patches + 1, embed_dim), requires_grad=False)
+        self.cls_token = nn.Parameter(torch.randn(1, 1, embed_dim), requires_grad=True)
+        self.pos_embed = sinusoidal_pos_embedding2d(self.num_patches, embed_dim)
         
     def forward(self, x):
         B, C, H, W = x.shape # -> should be B - N (total_num_of_patches) - D (embed dim from conv2d) -> (16, 3, 128, 128)
         x = self.proj(x).flatten(2).transpose(1, 2) ## (16, 256, 8, 8) -> (16, 256, 64) -> (16, 64, 256)
-        cls_tokens = self.cls_token.expand(B, -1, -1) ## (16, 1, 256) -> cls token for every image per batch
-        x = torch.cat((cls_tokens, x), dim=1)
         x = x + self.pos_embed
+        x = torch.cat((torch.repeat_interleave(self.cls_token, B, dim=0), x), dim=1) # concat on dim 1: B,N,D -> B,N+1,D (cls token)
         return x
     
 class TransformerEncoder(nn.Module):

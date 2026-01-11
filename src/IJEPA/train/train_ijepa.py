@@ -39,13 +39,13 @@ def train(teacher_mod,
         images = images.to(device)
         labels = labels.to(device)
         
-        context_masks, target_masks = mask(images) # only indices
+        context_masks, target_masks = mask(images) # only indices -> exclude cls
         
         with torch.no_grad():
             teacher_tokens = teacher_mod(images)
             teacher_tokens = F.layer_norm(teacher_tokens, (teacher_tokens.size(-1),))
             teacher_target_tokens = apply_mask(teacher_tokens, target_masks)
-        
+
         student_tokens = student_mod(images, masks=context_masks)
 
         # if debug == "y":

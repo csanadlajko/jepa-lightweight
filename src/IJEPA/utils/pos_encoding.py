@@ -39,3 +39,5 @@ def sinusoidal_pos_embedding2d(num_patches, embed_dim):
     y_pos_embeddings = generate_sinusoidal_1d(y_positions, embed_dim)
 
     pos_embed = torch.cat((x_pos_embeddings, y_pos_embeddings), -1)
+
+    return pos_embed

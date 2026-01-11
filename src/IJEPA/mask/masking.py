@@ -196,22 +196,27 @@ class Mask(object):
             
         return collated_batch, masked_ctx_batch, masked_target_batch
     
-def apply_mask(x, mask_indices: list[torch.Tensor]):
+def apply_mask(x, mask_indices: list[torch.Tensor], predictor=False):
     if isinstance(mask_indices, list):
         all_masked_tokens = []
         for i, mask_idx in enumerate(mask_indices):
             if isinstance(mask_idx, list):
                 # enter when selecting target blocks
                 all_idx = torch.cat(mask_idx).to(device)
-                if all_idx.numel() > 0:
-                    masked_tokens = x[i:i+1].index_select(1, all_idx + 1) ## needed for cls token
-                    all_masked_tokens.append(masked_tokens)
+                conc=False # dont concat when using teacher, only use N patches for masking
             else:
-                mask_idx = mask_idx.to(device)
                 # enter when selecting context blocks
-                if mask_idx.numel() > 0:
-                    masked_tokens = x[i:i+1].index_select(1, mask_idx + 1) ## needed for cls token
-                    all_masked_tokens.append(masked_tokens)
+                all_idx = mask_idx.to(device)
+                conc=True # concat when selecting context blocks for vit and vit predictor
+            if all_idx.numel() > 0:
+                if not predictor:
+                    patch_idx = all_idx+1 ## shift indices to right because cls
+                else:
+                    patch_idx = all_idx ## dont shift when using predictor -> not predicting cls token
+                ## concat cls when working with context blocks otherwise only shift indices to right
+                indices = torch.cat([torch.tensor([0], device=device), patch_idx]) if conc==True else patch_idx
+                masked_tokens = x[i:i+1].index_select(1, indices) ## needed for cls token
+                all_masked_tokens.append(masked_tokens)
         return torch.cat(all_masked_tokens, dim=0).to(device)
     else:
         return x.index_select(1, mask_indices)
