@@ -13,21 +13,20 @@ mm_params = all_params["multimodal"]
 
 transform = transforms.Compose([
     transforms.Resize((parameters["IMAGE_SIZE"], parameters["IMAGE_SIZE"])),
-    transforms.RandomInvert(0.5),
+    transforms.RandomInvert(0.3),
     transforms.RandomHorizontalFlip(p=0.6),
-    transforms.RandomRotation(degrees=30),
-    transforms.ColorJitter(brightness=0.6, contrast=0.8),
+    # transforms.RandomRotation(degrees=180),
+    transforms.ColorJitter(brightness=0.3, contrast=0.3),
     transforms.ToTensor(),
-    transforms.GaussianBlur(3, (0.1, 1)),
-    transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                     std=[0.229, 0.224, 0.225])
+    transforms.Normalize(mean=[0.4914, 0.4822, 0.4465],
+                     std=[0.247, 0.243, 0.261])
 ])
 
 
 test_transform = transforms.Compose([
     transforms.Resize((parameters["IMAGE_SIZE"], parameters["IMAGE_SIZE"])),
     transforms.ToTensor(),
-    transforms.Normalize(mean=[0.4914, 0.4822, 0.4465], std=[0.2023, 0.1994, 0.2010])
+    transforms.Normalize(mean=[0.4914, 0.4822, 0.4465], std=[0.247, 0.243, 0.261])
 ])
 
 def get_cifarten_dataset():
