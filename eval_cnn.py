@@ -55,9 +55,9 @@ def train():
     total, correct = 0, 0
     total_loss = 0
     for batch_idx, (imgs, labels) in enumerate(train_loader):
-        y_pred = model.forward(imgs)
         imgs.to(device)
         labels.to(device)
+        y_pred = model.forward(imgs)
 
         loss = criterion(y_pred, labels)
         loss.backward()
@@ -90,7 +90,7 @@ def eval_lenet(train_data, model):
 
         correct += (predicted == labels).sum().item()
 
-        if batch_idx % 100 == 0:
+        if batch_idx % 500 == 0:
             print(f"running accuracy: {correct / total * 100}")
 
     
