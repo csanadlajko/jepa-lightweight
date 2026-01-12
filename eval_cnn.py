@@ -1,8 +1,18 @@
 import torch.nn as nn
 import torch
-from src.IJEPA.transform.datatransform import train_loader, test_loader
+from ijepa import get_dataset
+from src.parser.parser import parse_jepa_args
 import matplotlib.pyplot as plt
 import datetime
+
+args = parse_jepa_args()
+
+datasets = get_dataset(args.dataset, args.dataset_input)
+
+if "error" in datasets:
+    raise FileNotFoundError(datasets["error"])
+
+train_loader, test_loader = datasets["train_loader"], datasets["test_loader"]
 
 run_identifier: str = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
 
@@ -25,7 +35,7 @@ class LeNet(nn.Module):
             nn.ReLU(),
             nn.Linear(120, 84),
             nn.ReLU(),
-            nn.Linear(84, 10)
+            nn.Linear(84, args.num_classes)
         )
 
     def forward(self, x):
@@ -39,7 +49,7 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 model = LeNet().to(device)
 
 criterion = torch.nn.CrossEntropyLoss()
-optim = torch.optim.Adam(model.parameters(), lr=0.0005)
+optim = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=0.05)
 
 def train():
     total, correct = 0, 0
@@ -95,7 +105,7 @@ def show_lenet_accuracy(accuracy_list: list):
     plt.title("LeNet accuracy per epoch (%)")
     plt.legend()
     plt.grid(True)
-    plt.savefig(f'lenet_accuracy_plot_{run_identifier}.png', dpi=300)
+    plt.savefig(f'/{args.result_folder}/lenet_accuracy_plot_{run_identifier}.png', dpi=300)
     plt.show()
 
 def show_lenet_loss(loss_list: list):
@@ -107,7 +117,7 @@ def show_lenet_loss(loss_list: list):
     plt.title("LeNet loss per epoch")
     plt.legend()
     plt.grid(True)
-    plt.savefig(f'lenet_loss_plot_{run_identifier}.png', dpi=300)
+    plt.savefig(f'/{args.result_folder}/lenet_loss_plot_{run_identifier}.png', dpi=300)
     plt.show()
 
 acc_list = []
@@ -115,13 +125,13 @@ loss_list = []
 
 print(f"starting training LeNet CNN model with: {sum(p.numel() for p in model.parameters())}")
 
-for i in range(20):
+for i in range(args.epochs):
     running_acc, running_loss = train()
     acc_list.append(running_acc)
     loss_list.append(running_loss)
     print(f"epoch {i+1} done")
 
-torch.save(model.state_dict(), f"trained_lenet_{run_identifier}.pth")
+torch.save(model.state_dict(), f"/{args.result_folder}/trained_lenet_{run_identifier}.pth")
 
 show_lenet_loss(loss_list)
 show_lenet_accuracy(acc_list)

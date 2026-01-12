@@ -19,7 +19,7 @@ class MRIImageDataset(Dataset):
         img_path = os.path.join(self.root_dir, self.imgs[idx])
         image = Image.open(img_path).convert('RGB')
         
-        label = int(self.labels[idx])
+        label = int(self.labels[idx])-1 ## -1 for CE loss
 
         if self.transform is not None:
             image = self.transform(image)

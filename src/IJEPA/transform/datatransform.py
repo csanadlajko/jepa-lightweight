@@ -17,6 +17,7 @@ transform = transforms.Compose([
     transforms.RandomHorizontalFlip(p=0.6),
     # transforms.RandomRotation(degrees=180),
     transforms.ColorJitter(brightness=0.3, contrast=0.3),
+    # transforms.GaussianBlur(kernel_size=16),
     transforms.ToTensor(),
     transforms.Normalize(mean=[0.4914, 0.4822, 0.4465],
                      std=[0.247, 0.243, 0.261])
