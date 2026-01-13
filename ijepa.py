@@ -28,10 +28,10 @@ def init_weights(m):
         torch.nn.init.ones_(m.weight)
         torch.nn.init.zeros_(m.bias)
 
-def get_dataset(dataset_name: str, input_folder: str = ""):
+def get_dataset(dataset_name: str, input_folder: str = "", reverse: str = "n"):
     datasets = {}
     if dataset_name == "cifar10":
-        train_loader, test_loader = get_cifarten_dataset()
+        train_loader, test_loader = get_cifarten_dataset(reverse)
         datasets["train_loader"] = train_loader
         datasets["test_loader"] = test_loader
     elif dataset_name == "cifar10dot1":
@@ -39,7 +39,7 @@ def get_dataset(dataset_name: str, input_folder: str = ""):
         datasets["train_loader"] = train_loader
         datasets["test_loader"] = test_loader
     elif dataset_name == "mri":
-        train_loader, test_loader = get_mri_dataset(input_folder)
+        train_loader, test_loader = get_mri_dataset(input_folder, reverse)
         datasets["train_loader"] = train_loader
         datasets["test_loader"] = test_loader
     else:
@@ -54,7 +54,7 @@ if __name__ == "__main__":
     run_identifier: str = datetime.datetime.now().strftime("%Y-%m-%dT%H%M%SZ")
     result_folder: str = args.result_folder
 
-    datasets = get_dataset(args.dataset, args.dataset_input)
+    datasets = get_dataset(args.dataset, args.dataset_input, args.reverse_transform)
 
     if "error" in datasets:
         raise FileNotFoundError(datasets["error"])

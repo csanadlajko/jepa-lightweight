@@ -17,7 +17,7 @@ transform = transforms.Compose([
     transforms.RandomHorizontalFlip(p=0.6),
     # transforms.RandomRotation(degrees=180),
     transforms.ColorJitter(brightness=0.3, contrast=0.3),
-    # transforms.GaussianBlur(kernel_size=16),
+    transforms.GaussianBlur(kernel_size=16),
     transforms.ToTensor(),
     transforms.Normalize(mean=[0.4914, 0.4822, 0.4465],
                      std=[0.247, 0.243, 0.261])
@@ -30,9 +30,13 @@ test_transform = transforms.Compose([
     transforms.Normalize(mean=[0.4914, 0.4822, 0.4465], std=[0.247, 0.243, 0.261])
 ])
 
-def get_cifarten_dataset():
-    train_data = datasets.CIFAR10("data", train=True, transform=transform, download=True)
-    test_data = datasets.CIFAR10("data", transform=test_transform, train=False, download=True)
+def get_cifarten_dataset(reverse: str = "n"):
+    if reverse=="y":
+        train_data = datasets.CIFAR10("data", train=True, transform=test_transform, download=True)
+        test_data = datasets.CIFAR10("data", transform=transform, train=False, download=True)
+    else:
+        train_data = datasets.CIFAR10("data", train=True, transform=transform, download=True)
+        test_data = datasets.CIFAR10("data", transform=test_transform, train=False, download=True)
 
     ## batchify data
 
@@ -50,10 +54,14 @@ def get_cifarten_dataset():
 
 ## LOAD MRI DATASET
 
-def get_mri_dataset(input_folder: str):
+def get_mri_dataset(input_folder: str, reverse: str = "n"):
     # inverse transform for measuting generalization
-    full_dataset_train = MRIImageDataset(input_folder, transform=transform)
-    full_dataset_test = MRIImageDataset(input_folder, transform=test_transform)
+    if reverse=="y":
+        full_dataset_train = MRIImageDataset(input_folder, transform=transform)
+        full_dataset_test = MRIImageDataset(input_folder, transform=test_transform)
+    else:
+        full_dataset_train = MRIImageDataset(input_folder, transform=test_transform)
+        full_dataset_test = MRIImageDataset(input_folder, transform=transforms)
 
     train_size = int(0.8 * len(full_dataset_train))
     test_size = len(full_dataset_train) - train_size
@@ -76,7 +84,7 @@ def get_mri_dataset(input_folder: str):
 
 ## LOAD CIFAR10.1 DATASET
 
-def get_cifar_tendotone_dataset(input_folder):
+def get_cifar_tendotone_dataset(input_folder: str):
     cifar10dot1 = CIFAR10dot1Dataset("CIFAR10dot1/cifar10.1_v6_data.npy", "CIFAR10dot1/cifar10.1_v6_labels.npy", transform=test_transform)
     cifar101_test_loader = DataLoader(
         dataset=cifar10dot1,

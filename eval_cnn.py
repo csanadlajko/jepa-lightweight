@@ -55,8 +55,8 @@ def train():
     total, correct = 0, 0
     total_loss = 0
     for batch_idx, (imgs, labels) in enumerate(train_loader):
-        imgs.to(device)
-        labels.to(device)
+        imgs = imgs.to(device)
+        labels = labels.to(device)
         y_pred = model.forward(imgs)
 
         loss = criterion(y_pred, labels)
@@ -82,8 +82,8 @@ def train():
 def eval_lenet(train_data, model):
     total, correct = 0, 0
     for batch_idx, (imgs, labels) in enumerate(train_data):
-        imgs.to(device)
-        labels.to(device)
+        imgs = imgs.to(device)
+        labels = labels.to(device)
         y_pred = model.forward(imgs)
         _, predicted = torch.max(y_pred, 1)
         total += labels.size(0)
