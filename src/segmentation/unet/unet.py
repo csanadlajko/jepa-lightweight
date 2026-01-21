@@ -1,17 +1,20 @@
 import torch
 import torch.nn as nn
 from torch.nn.functional import relu
+from torch.utils.data.dataloader import DataLoader
 
 # standard unet model used for tumor segmentation
 # code credit: https://medium.com/data-science/cook-your-first-u-net-in-pytorch-b3297a844cf3
 
+device = "cuda" if torch.cuda.is_available() else "cpu"
+
 class UNet(nn.Module):
 
-    def __init__(self, num_classes):
+    def __init__(self, in_chans, num_classes):
         super().__init__()
 
         # encoder
-        self.enc11 = nn.Conv2d(3, 64, kernel_size=3, padding=1) # in_chan size 3 might be useless in case of cancer dataset
+        self.enc11 = nn.Conv2d(in_chans, 64, kernel_size=3, padding=1)
         self.enc12 = nn.Conv2d(64, 64, kernel_size=3, padding=1)
         self.pool1 = nn.MaxPool2d(kernel_size=2, stride=2) # pooling for dimension reduction
 
@@ -97,4 +100,28 @@ class UNet(nn.Module):
 
         return out
 
+unet_model = UNet(in_chans=3, num_classes=1)
+criterion = nn.BCEWithLogitsLoss()
+optim = torch.optim.SGD(unet_model.parameters(), lr=0.01, momentum=0.5)
+
+def train_unet(epochs: int, train_loader: DataLoader):
+    for epoch in range(epochs):
+        total_loss: float = 0.0
+        print(f"=== Starting epoch: {epoch+1} ===")
+        for (imgs, labels) in train_loader:
+            imgs = imgs.to(device)
+            labels = labels.to(device)
+
+            images = images.permute(0,3,2,1).float()
+            labels = labels.permute(0,3,2,1).float()
+            labels = labels.sum(1,keepdim=True).bool().float()
+
+            output = unet_model(images)
+
+            loss = criterion(output, labels)
+            optim.zero_grad()
+            loss.backward()
+            optim.step()
+            total_loss+=loss.item()
+        print(f"AVG loss in epoch: {epoch+1}: {total_loss/len(imgs):.4f}")
 

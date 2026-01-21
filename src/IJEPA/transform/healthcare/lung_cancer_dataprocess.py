@@ -1,6 +1,8 @@
 import os
 from PIL import Image
 from torch.utils.data import Dataset
+import json
+import torch
 
 class LungCancerDataset:
 
@@ -41,3 +43,53 @@ class LungCancerDataset:
             image = self.transform(image)
         
         return image, label
+    
+class PDL1Dataset(Dataset):
+
+    def __init__(self, img_dir: str, annotation_file: str, transforms=None):
+        self.img_dir = img_dir
+        self.transforms = transforms
+
+        with open(annotation_file) as f:
+            coco_data = json.load(f)
+
+        self.images = {f["id"]: f["file_name"] for f in coco_data["images"]}
+        self.annotations = {}
+        for ann in coco_data["annotations"]:
+            img_id = ann["image_id"]
+            self.annotations.setdefault(img_id, []).append(ann)
+
+        self.ids = list(self.images.keys())
+
+    def __len__(self):
+        return len(self.ids)
+    
+    def __getitem__(self, index):
+        img_id = self.ids[index]
+        file_name = self.images[img_id]
+
+        full_path = os.path.join(self.img_dir, file_name)
+        img = Image.open(full_path).convert("RGB")
+
+        annotations = self.annotations.get(img_id, [])
+        boxes = []
+        labels = []
+
+        for ann in annotations:
+            x, y, w, h = ann["bbox"]
+            boxes.append([x, y, x+w, y+h])
+            labels.append(ann["category_id"])
+
+        boxes = torch.tensor(boxes, dtype=torch.float32)
+        labels = torch.tensor(labels, dtype=torch.int64)
+
+        target = {
+            "boxes": boxes,
+            "labels": labels,
+            "image_id": torch.tensor([img_id])
+        }
+
+        if self.transforms:
+            img = self.transforms(img)
+
+        return img, target
