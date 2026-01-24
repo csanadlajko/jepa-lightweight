@@ -3,6 +3,9 @@ from PIL import Image
 from torch.utils.data import Dataset
 import json
 import torch
+from src.parser.parser import parse_jepa_args
+
+args = parse_jepa_args()
 
 class LungCancerDataset:
 
@@ -71,13 +74,17 @@ class PDL1Dataset(Dataset):
         full_path = os.path.join(self.img_dir, file_name)
         img = Image.open(full_path).convert("RGB")
 
+        w, h = img.size
+        scale_x = args.image_size / w
+        scale_y = args.image_size / h
+
         annotations = self.annotations.get(img_id, [])
         boxes = []
         labels = []
 
         for ann in annotations:
             x, y, w, h = ann["bbox"]
-            boxes.append([x, y, x+w, y+h])
+            boxes.append([x*scale_x, y*scale_y, (x+w)*scale_x, (y+h)*scale_y])
             labels.append(ann["category_id"])
 
         boxes = torch.tensor(boxes, dtype=torch.float32)

@@ -1,19 +1,15 @@
 from torch.utils.data import DataLoader, random_split
 from torchvision import datasets, transforms
-import json
 import torch
 from src.IJEPA.transform.healthcare.mri_dataprocess import MRIImageDataset
-from src.IJEPA.transform.healthcare.lung_cancer_dataprocess import LungCancerDataset
+from src.IJEPA.transform.healthcare.lung_cancer_dataprocess import LungCancerDataset, PDL1Dataset
 from src.IJEPA.transform.cifar10dot1 import CIFAR10dot1Dataset
+from src.parser.parser import parse_jepa_args
 
-file = open("././parameters.json")
-all_params: dict[str, int] = json.load(file)
-
-parameters = all_params["ijepa"]
-mm_params = all_params["multimodal"]
+args = parse_jepa_args()
 
 transform = transforms.Compose([
-    transforms.Resize((parameters["IMAGE_SIZE"], parameters["IMAGE_SIZE"])),
+    transforms.Resize((args.image_size, args.image_size)),
     transforms.RandomInvert(0.3),
     transforms.RandomHorizontalFlip(p=0.6),
     # transforms.RandomRotation(degrees=180),
@@ -26,10 +22,37 @@ transform = transforms.Compose([
 
 
 test_transform = transforms.Compose([
-    transforms.Resize((parameters["IMAGE_SIZE"], parameters["IMAGE_SIZE"])),
+    transforms.Resize((args.image_size, args.image_size)),
     transforms.ToTensor(),
     transforms.Normalize(mean=[0.4914, 0.4822, 0.4465], std=[0.247, 0.243, 0.261])
 ])
+
+def get_pdl1_dataset(input_dir: str, annotation_file_path: str, reverse: str = "n"):
+    if reverse=="y":
+        full_dataset_train = PDL1Dataset(input_dir, annotation_file_path, test_transform)
+        full_dataset_test = PDL1Dataset(input_dir, annotation_file_path, transform)
+    else:
+        full_dataset_train = PDL1Dataset(input_dir, annotation_file_path, transform)
+        full_dataset_test = PDL1Dataset(input_dir, annotation_file_path, test_transform)
+    
+    train_size: int = int(len(full_dataset_train)*0.8)
+    test_size: int = len(full_dataset_train) - train_size
+
+    train_data, test_indices = random_split(full_dataset_train, [train_size, test_size])
+
+    test_data = torch.utils.data.Subset(full_dataset_test, test_indices.indices)
+
+    train_loader = DataLoader(
+        dataset=train_data,
+        batch_size=args.batch_size,
+        shuffle=True
+    )
+    test_loader = DataLoader(
+        dataset=test_data,
+        batch_size=args.batch_size,
+        shuffle=False
+    )
+    return train_loader, test_loader
 
 def get_lung_cancer_dataset(input_dir: str, reverse: str = "n"):
     if reverse=="y":
@@ -48,12 +71,12 @@ def get_lung_cancer_dataset(input_dir: str, reverse: str = "n"):
 
     train_loader = DataLoader(
         dataset=train_data,
-        batch_size=parameters["BATCH_SIZE"],
+        batch_size=args.batch_size,
         shuffle=True
     )
     test_loader = DataLoader(
         dataset=test_data,
-        batch_size=parameters["BATCH_SIZE"],
+        batch_size=args.batch_size,
         shuffle=False
     )
     return train_loader, test_loader
@@ -70,12 +93,12 @@ def get_cifarten_dataset(reverse: str = "n"):
 
     train_loader = DataLoader(
         dataset=train_data,
-        batch_size=parameters["BATCH_SIZE"],
+        batch_size=args.batch_size,
         shuffle=True
     )
     test_loader = DataLoader(
         dataset=test_data,
-        batch_size=parameters["BATCH_SIZE"],
+        batch_size=args.batch_size,
         shuffle=False
     )
     return train_loader, test_loader
@@ -99,13 +122,13 @@ def get_mri_dataset(input_folder: str, reverse: str = "n"):
 
     mri_train_loader = DataLoader(
         dataset=mri_train_dset,
-        batch_size=parameters["BATCH_SIZE"],
+        batch_size=args.batch_size,
         shuffle=True
     )
 
     mri_test_loader = DataLoader(
         dataset=mri_test_dset,
-        batch_size=parameters["BATCH_SIZE"],
+        batch_size=args.batch_size,
         shuffle=False
     )
     return mri_train_loader, mri_test_loader
@@ -116,7 +139,7 @@ def get_cifar_tendotone_dataset(input_folder: str):
     cifar10dot1 = CIFAR10dot1Dataset("CIFAR10dot1/cifar10.1_v6_data.npy", "CIFAR10dot1/cifar10.1_v6_labels.npy", transform=test_transform)
     cifar101_test_loader = DataLoader(
         dataset=cifar10dot1,
-        batch_size=parameters["BATCH_SIZE"],
+        batch_size=args.batch_size,
     shuffle=False
     )
     return cifar101_test_loader

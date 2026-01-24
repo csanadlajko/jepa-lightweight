@@ -3,17 +3,16 @@ import matplotlib.pyplot as plt
 import numpy as np
 from src.IJEPA.mask.masking import Mask, apply_mask
 from src.IJEPA.transform.datatransform import get_cifarten_dataset
-import json
+from src.parser.parser import parse_jepa_args
+
+args = parse_jepa_args()
 
 train_loader, test_loader = get_cifarten_dataset()
 
-file = open("parameters.json")
-parameters = json.load(file)["ijepa"]
-
 def visualize_masks(images, context_masks, target_masks, num_samples=4):
     batch_size = min(images.shape[0], num_samples)
-    patch_size = parameters["PATCH_SIZE"]
-    img_size = parameters["IMAGE_SIZE"]
+    patch_size = args.patch_size
+    img_size = args.image_size
     num_patches_per_side = img_size // patch_size
     
     fig, axes = plt.subplots(batch_size, 3, figsize=(15, 5 * batch_size))

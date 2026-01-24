@@ -1,26 +1,81 @@
 import math
 from multiprocessing import Value
 import torch
-import json
+from src.parser.parser import parse_jepa_args
+from typing import Any
 
-file = open("././parameters.json")
-total_params: dict[str, int] = json.load(file)
+args = parse_jepa_args()
 
-parameters = total_params["ijepa"]
-mm_parameters = total_params["multimodal"]
-
-DEBUG = mm_parameters["DEBUG"]
+DEBUG = True if args.debug == "y" else False
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
+
+class CellMask(object):
+
+    """
+    Mask a cell by the following logic: \n
+        - Check patch index of (x, y) by bounding box,
+        - Check patch index of (x, y - h) by bounding box,
+        - Check patch index of (x + w, y) by bounding box,
+        - Check patch index of (x + w, y - h) by bounding box.\n
+    Afterwards mask these patches as they will give the local representations.
+    """
+
+    def __init__(
+            self,
+            bbox_list: list[list[Any]], ## list of boundig boxes per image [x, y, w, h]
+            input_size=(args.image_size, args.image_size),
+            patch_size=args.patch_size,
+            ntarg=args.num_target,
+            ctx_mask_scale=(0.2, 0.8)
+        ):
+        if isinstance(input_size, int):
+            input_size = (input_size, input_size)
+
+        self.height = input_size[0] // patch_size
+        self.width = input_size[1] // patch_size
+        self.patch_size = patch_size
+        self.ntarg = ntarg
+        self.ctx_mask_scale = ctx_mask_scale
+        self.bbox_list = bbox_list
+        self.num_pathes = self.height * self.width
+
+    def _get_patch_indices_by_coordinates(self, bbox: list[int]) -> list[int]:
+        
+        """
+        Returns the flattened patch indices where the bounding box overlaps.
+        """
+
+        x, y, w, h = bbox ## x, y top left; w, h bottom right
+
+        ## transform from regular coordinates to patch coordinates
+        top_left_patch_index = (x // self.patch_size, y // self.patch_size)
+        top_right_patch_index = ((x+w)//self.patch_size, y // self.patch_size)
+        bottom_left_patch_index = (x // self.patch_size, (y+h) // self.patch_size)
+        bottom_right_patch_index = ((x+w) // self.patch_size, (y+h) // self.patch_size)
+
+        ## transform from patch coordinates to flattened patch index
+        flattened_top_left = (self.width * top_left_patch_index[1]) + top_left_patch_index[0]
+        flattened_top_right = (self.width * top_right_patch_index[1]) + top_right_patch_index[0]
+        flattened_bottom_left = (self.width * bottom_left_patch_index[1]) + bottom_left_patch_index[0]
+        flattened_bottom_right = (self.width * bottom_right_patch_index[1]) + bottom_right_patch_index[0]
+
+        ## return the corresponding patch index in the following order: [top_left;top_right;bottom_left;bottom_right]
+        ## it is possible for them all to be the same idx as well as they could all be different
+        return [flattened_top_left, flattened_top_right, flattened_bottom_left, flattened_bottom_right]
+    
+    def __call__(self, batch):
+        pass
+
 
 class Mask(object):
     
     def __init__(
         self,
-        input_size=(parameters["IMAGE_SIZE"], parameters["IMAGE_SIZE"]),
-        patch_size=parameters["PATCH_SIZE"],
+        input_size=(args.image_size, args.image_size),
+        patch_size=args.patch_size,
         nctx=1,
-        ntarg=parameters["NUM_TARGET_BLOCKS"],
+        ntarg=args.num_target,
         targ_mask_scale=(0.05, 0.1),
         ctx_mask_scale=(0.2, 0.8),
         aspect_ratio=(0.75, 1.5),

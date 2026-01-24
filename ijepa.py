@@ -11,7 +11,8 @@ from src.IJEPA.transform.datatransform import (
     get_cifar_tendotone_dataset, 
     get_cifarten_dataset, 
     get_mri_dataset, 
-    get_lung_cancer_dataset 
+    get_lung_cancer_dataset,
+    get_pdl1_dataset
 )
 from src.IJEPA.config_ijepa import get_model_config
 from transformers import AutoTokenizer, AutoModelForCausalLM
@@ -49,6 +50,10 @@ def get_dataset(dataset_name: str, input_folder: str = "", reverse: str = "n"):
         datasets["test_loader"] = test_loader
     elif dataset_name == "lung-cancer":
         train_loader, test_loader = get_lung_cancer_dataset(input_folder, reverse)
+        datasets["train_loader"] = train_loader
+        datasets["test_loader"] = test_loader
+    elif dataset_name == "pdl1":
+        train_loader, test_loader = get_pdl1_dataset(input_folder, args.annotation_path, reverse)
         datasets["train_loader"] = train_loader
         datasets["test_loader"] = test_loader
     else:
