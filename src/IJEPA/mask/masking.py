@@ -26,7 +26,6 @@ class CellMask(object):
             bbox_list: list[list[Any]], ## list of boundig boxes per image [x, y, w, h]
             input_size=(args.image_size, args.image_size),
             patch_size=args.patch_size,
-            ntarg=args.num_target,
             ctx_mask_scale=(0.2, 0.8)
         ):
         if isinstance(input_size, int):
@@ -35,34 +34,42 @@ class CellMask(object):
         self.height = input_size[0] // patch_size
         self.width = input_size[1] // patch_size
         self.patch_size = patch_size
-        self.ntarg = ntarg
         self.ctx_mask_scale = ctx_mask_scale
         self.bbox_list = bbox_list
         self.num_pathes = self.height * self.width
 
-    def _get_patch_indices_by_coordinates(self, bbox: list[int]) -> list[int]:
+    def _get_patch_indices_by_coordinates(
+            self, 
+            bbox: list[list[int]] ## list of bboxes -> in case of target its about 20% og the total size
+        ) -> list[int]:
         
         """
         Returns the flattened patch indices where the bounding box overlaps.
         """
 
-        x, y, w, h = bbox ## x, y top left; w, h bottom right
+        patch_indices = set()
 
-        ## transform from regular coordinates to patch coordinates
-        top_left_patch_index = (x // self.patch_size, y // self.patch_size)
-        top_right_patch_index = ((x+w)//self.patch_size, y // self.patch_size)
-        bottom_left_patch_index = (x // self.patch_size, (y+h) // self.patch_size)
-        bottom_right_patch_index = ((x+w) // self.patch_size, (y+h) // self.patch_size)
+        for box in bbox:
+            x, y, w, h = box ## x, y top left; w, h width-height
 
-        ## transform from patch coordinates to flattened patch index
-        flattened_top_left = (self.width * top_left_patch_index[1]) + top_left_patch_index[0]
-        flattened_top_right = (self.width * top_right_patch_index[1]) + top_right_patch_index[0]
-        flattened_bottom_left = (self.width * bottom_left_patch_index[1]) + bottom_left_patch_index[0]
-        flattened_bottom_right = (self.width * bottom_right_patch_index[1]) + bottom_right_patch_index[0]
+            ## transform from regular coordinates to patch coordinates
+            top_left_patch_index = (x // self.patch_size, y // self.patch_size)
+            top_right_patch_index = ((x+w)//self.patch_size, y // self.patch_size)
+            bottom_left_patch_index = (x // self.patch_size, (y+h) // self.patch_size)
+            bottom_right_patch_index = ((x+w) // self.patch_size, (y+h) // self.patch_size)
 
-        ## return the corresponding patch index in the following order: [top_left;top_right;bottom_left;bottom_right]
-        ## it is possible for them all to be the same idx as well as they could all be different
-        return [flattened_top_left, flattened_top_right, flattened_bottom_left, flattened_bottom_right]
+            ## transform from patch coordinates to flattened patch index
+            flattened_top_left = (self.width * top_left_patch_index[1]) + top_left_patch_index[0]
+            flattened_top_right = (self.width * top_right_patch_index[1]) + top_right_patch_index[0]
+            flattened_bottom_left = (self.width * bottom_left_patch_index[1]) + bottom_left_patch_index[0]
+            flattened_bottom_right = (self.width * bottom_right_patch_index[1]) + bottom_right_patch_index[0]
+
+            # for y in range(fla)
+
+            ## using set because duplication is not allowed
+            patch_indices.update((flattened_top_left, flattened_top_right, flattened_bottom_left, flattened_bottom_right))
+
+        return list(patch_indices)
     
     def __call__(self, batch):
         pass
