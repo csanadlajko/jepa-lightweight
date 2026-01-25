@@ -40,7 +40,7 @@ class CellMask(object):
 
     def _get_patch_indices_by_coordinates(
             self, 
-            bbox: list[list[int]] ## list of bboxes -> in case of target its about 20% og the total size
+            bbox: list[list[int]] ## list of bboxes -> in case of target its about 20% of the total size
         ) -> list[int]:
         
         """
@@ -50,24 +50,21 @@ class CellMask(object):
         patch_indices = set()
 
         for box in bbox:
-            x, y, w, h = box ## x, y top left; w, h width-height
+            x, y, w, h = box ## x, y top left; w, h width-height (not bottom right corner!!!)
 
             ## transform from regular coordinates to patch coordinates
             top_left_patch_index = (x // self.patch_size, y // self.patch_size)
-            top_right_patch_index = ((x+w)//self.patch_size, y // self.patch_size)
-            bottom_left_patch_index = (x // self.patch_size, (y+h) // self.patch_size)
             bottom_right_patch_index = ((x+w) // self.patch_size, (y+h) // self.patch_size)
 
-            ## transform from patch coordinates to flattened patch index
-            flattened_top_left = (self.width * top_left_patch_index[1]) + top_left_patch_index[0]
-            flattened_top_right = (self.width * top_right_patch_index[1]) + top_right_patch_index[0]
-            flattened_bottom_left = (self.width * bottom_left_patch_index[1]) + bottom_left_patch_index[0]
-            flattened_bottom_right = (self.width * bottom_right_patch_index[1]) + bottom_right_patch_index[0]
+            x_0, y_0 = top_left_patch_index
+            x_1, y_1 = bottom_right_patch_index
 
-            # for y in range(fla)
-
-            ## using set because duplication is not allowed
-            patch_indices.update((flattened_top_left, flattened_top_right, flattened_bottom_left, flattened_bottom_right))
+            ## cover the whole block by top left and bottom right patch indices
+            for y in range(int(y_0), int(y_1) + 1):
+                for x in range(int(x_0), int(x_1) + 1):
+                    ## transform from patch coordinates to flattened patch index
+                    idx = (self.width * y) + x
+                    patch_indices.add(torch.tensor([idx]))
 
         return list(patch_indices)
     

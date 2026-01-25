@@ -84,7 +84,7 @@ class PDL1Dataset(Dataset):
 
         for ann in annotations:
             x, y, w, h = ann["bbox"]
-            boxes.append([x*scale_x, y*scale_y, (x+w)*scale_x, (y+h)*scale_y])
+            boxes.append([x*scale_x, y*scale_y, w*scale_x, h*scale_y])
             labels.append(ann["category_id"])
 
         boxes = torch.tensor(boxes, dtype=torch.float32)
