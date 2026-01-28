@@ -45,12 +45,14 @@ def get_pdl1_dataset(input_dir: str, annotation_file_path: str, reverse: str = "
     train_loader = DataLoader(
         dataset=train_data,
         batch_size=args.batch_size,
-        shuffle=True
+        shuffle=True,
+        collate_fn=PDL1Dataset.collate_fn
     )
     test_loader = DataLoader(
         dataset=test_data,
         batch_size=args.batch_size,
-        shuffle=False
+        shuffle=False,
+        collate_fn=PDL1Dataset.collate_fn
     )
     return train_loader, test_loader
 

@@ -7,6 +7,9 @@ from src.IJEPA.train.train_ijepa import (
     show_loss_per_epoch, # cls loss plot
     eval_cls # cls evalutaion on the test dataset
 )
+from src.IJEPA.train.train_pdl1_mm_jepa import (
+    train_pdl1 ## train JEPA model on PDL1 cell dataset
+)
 from src.IJEPA.transform.datatransform import (
     get_cifar_tendotone_dataset, 
     get_cifarten_dataset, 
@@ -135,18 +138,35 @@ if __name__ == "__main__":
 
         print(f"\n=== EPOCH {epoch + 1}/{args.epochs} ===")
 
-        loss_epoch = train(
-            teacher_model, 
-            student_model, 
-            train_loader, 
-            model_config["optim_student"],
-            model_config["optim_predictor"],
-            predictor,
-            args.momentum,
-            model_config["ijepa_loss"],
-            args.multimodal_run,
-            args.debug
-        )
+        if args.dataset != "pdl1":
+            ## train JEPA on regular classification tasks with cls token
+            loss_epoch = train(
+                teacher_model, 
+                student_model, 
+                train_loader, 
+                model_config["optim_student"],
+                model_config["optim_predictor"],
+                predictor,
+                args.momentum,
+                model_config["ijepa_loss"],
+                args.multimodal_run,
+                args.debug
+            )
+        else:
+            ## train JEPA on PDL1 dataset with local representation classification
+            print("setting up pdl1 training...")
+            loss_epoch = train_pdl1(
+                teacher_model, 
+                student_model, 
+                train_loader, 
+                model_config["optim_student"],
+                model_config["optim_predictor"],
+                predictor,
+                args.momentum,
+                model_config["ijepa_loss"],
+                args.multimodal_run,
+                args.cell_percentage
+            )
 
         student_scheduler.step()
         jepa_loss_per_epoch.append(loss_epoch)

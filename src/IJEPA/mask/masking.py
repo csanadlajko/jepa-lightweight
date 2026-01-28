@@ -36,45 +36,64 @@ class CellMask(object):
 
     def _get_patch_indices_by_coordinates(
             self, 
-            bbox: list[list[int]] ## list of bboxes -> in case of target its about 20% of the total size
-        ) -> list[int]:
+            annotation_batch: list[dict[str, Any]] ## list of annotations per batch
+        ) -> list[list]:
         
         """
         Returns the flattened patch indices where the bounding box overlaps.
         """
+        ## a list for containing all the patch indices for every image in the batch
+        batch_patch_indices: list[list] = []
+        for annotation in annotation_batch:
+            patch_indices = set()
+            for box in annotation["boxes"]:
+                x, y, w, h = box ## x, y top left; w, h width-height (not bottom right corner!!!)
 
-        patch_indices = set()
+                ## transform from regular coordinates to patch coordinates
+                top_left_patch_index = (x // self.patch_size, y // self.patch_size)
+                bottom_right_patch_index = ((x+w) // self.patch_size, (y+h) // self.patch_size)
 
-        for box in bbox:
-            x, y, w, h = box ## x, y top left; w, h width-height (not bottom right corner!!!)
+                x_0, y_0 = top_left_patch_index
+                x_1, y_1 = bottom_right_patch_index
 
-            ## transform from regular coordinates to patch coordinates
-            top_left_patch_index = (x // self.patch_size, y // self.patch_size)
-            bottom_right_patch_index = ((x+w) // self.patch_size, (y+h) // self.patch_size)
-
-            x_0, y_0 = top_left_patch_index
-            x_1, y_1 = bottom_right_patch_index
-
-            ## cover the whole block by top left and bottom right patch indices
-            for y in range(int(y_0), int(y_1)):
-                for x in range(int(x_0), int(x_1)):
-                    ## transform from patch coordinates to flattened patch index
-                    idx = (self.width * y) + x
-                    patch_indices.add(idx)
-        return list(patch_indices)
+                ## cover the whole block by top left and bottom right patch indices
+                for y in range(int(y_0), int(y_1)):
+                    for x in range(int(x_0), int(x_1)):
+                        ## transform from patch coordinates to flattened patch index
+                        idx = (self.width * y) + x
+                        patch_indices.add(idx)
+            batch_patch_indices.append(list(patch_indices))
+        return batch_patch_indices
     
-    def __call__(self, cell_percentage, bbox):
+    def __call__(self, cell_percentage, bbox, embed_dim):
         """
         Covers ``cell_percentage`` of the given cells, uses the rest as the context space.
         """
-        all_target_cells = self._get_patch_indices_by_coordinates(bbox)
+        ## len(batch_size) list (B, K) where K is the number of found patches per image
+        ## contains patch indices for each image in the batch
+        all_target_cells: list[list] = self._get_patch_indices_by_coordinates(bbox)
         pct = float(cell_percentage / 100)
-        selected_numer = int(len(all_target_cells) * pct)
-        sampled_target_cells = random.sample(all_target_cells, selected_numer)
-        sample_set = set(sampled_target_cells)
-        unchoosen = torch.tensor([[idx] for idx in all_target_cells if idx not in sample_set])
-        target_list = [torch.tensor(idx) for idx in sampled_target_cells]
-        return unchoosen, target_list
+        selected_number = int(len(all_target_cells) * pct)
+        ## (B, K) filtered list for target patches
+        selected_target_patches: list = []
+        ## (B, K) filtered list for context pacthes
+        remaining_context_patches: list = []
+        for image in all_target_cells:
+            sample = random.sample(image, selected_number)
+            selected_target_patches.append(sample)
+            sample_set = set(sample)
+            unchoosen = [idx for idx in image if idx not in sample_set]
+            remaining_context_patches.append(unchoosen)
+        ## issue -> at (B, K), K should be constant for every image
+        ## otherwise it can not be processed as a tensor
+        selected_target_patches = torch.tensor(selected_target_patches, dtype=torch.long, device=device)
+        remaining_context_patches = torch.tensor(remaining_context_patches, dtype=torch.long, device=device)
+
+        ## expand both target and context indices to embed dimension for easier indexing
+        ## (B, K) -> (B, K, D)
+        target_indices = torch.unsqueeze(-1).expand(-1, -1, embed_dim)
+        context_indices = torch.unsqueeze(-1).expand(-1, -1, embed_dim)
+        return context_indices, target_indices
 
 
 class Mask(object):

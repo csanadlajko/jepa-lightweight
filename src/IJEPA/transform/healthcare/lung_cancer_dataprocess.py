@@ -4,6 +4,7 @@ from torch.utils.data import Dataset
 import json
 import torch
 from src.parser.parser import parse_jepa_args
+from abc import abstractmethod
 
 args = parse_jepa_args()
 
@@ -97,3 +98,9 @@ class PDL1Dataset(Dataset):
             img = self.transforms(img)
 
         return img, target
+    
+    @abstractmethod
+    def collate_fn(batch):
+        images = torch.stack([image[0] for image in batch])
+        annotations = [ann[1] for ann in batch]
+        return images, annotations

@@ -60,7 +60,7 @@ class ViTPredictor(nn.Module):
         self.tokenizer = tokenizer
         self.text_encoder = text_encoder
 
-    def forward(self, x, context_mask, target_mask, labels: torch.Tensor, multimodal: bool, return_cls_only = False):
+    def forward(self, x, context_mask, target_mask, labels: torch.Tensor, multimodal: bool, return_cls_only = False, cell_mask=False):
         ## x includes cls token on index 0
 
         B = x.size(0)
@@ -68,7 +68,10 @@ class ViTPredictor(nn.Module):
         x = self.predictor_embed(x)
         
         ## select target positions excluding the cls token
-        target_positions = apply_mask(self.pred_pos_embed.repeat(B, 1, 1), target_mask, predictor=True)
+        if cell_mask==False:
+            target_positions = apply_mask(self.pred_pos_embed.repeat(B, 1, 1), target_mask, predictor=True)
+        else: 
+            target_positions = torch.gather(self.pred_pos_embed.repeat(B, 1, 1), dim=1, index=target_mask)
 
         num_target_tokens = target_positions.size(1)
         mask_tokens = self.mask_token.repeat(target_positions.size(0), num_target_tokens, 1)
@@ -155,10 +158,13 @@ class PatchEmbed(nn.Module):
         self.cls_token = nn.Parameter(torch.randn(1, 1, embed_dim), requires_grad=True)
         self.pos_embed = sinusoidal_pos_embedding2d(self.num_patches, embed_dim)
         
-    def forward(self, x):
+    def forward(self, x, cls=True):
         B, C, H, W = x.shape # -> should be B - N (total_num_of_patches) - D (embed dim from conv2d) -> (16, 3, 128, 128)
         x = self.proj(x).flatten(2).transpose(1, 2) ## (16, 256, 8, 8) -> (16, 256, 64) -> (16, 64, 256)
         x = x + self.pos_embed
+        if cls==False:
+            ## return if no cls token is needed
+            return x
         x = torch.cat((torch.repeat_interleave(self.cls_token, B, dim=0), x), dim=1) # concat on dim 1: B,N,D -> B,N+1,D (cls token)
         return x
     
@@ -199,11 +205,14 @@ class VisionTransformer(nn.Module):
         ])
         self.norm = nn.LayerNorm(embed_dim)
         
-    def forward(self, x, masks=None, return_cls_only=False, return_logits=False):
-        x = self.patch_embed(x) # patch embed and pos encoding
+    def forward(self, x, masks=None, return_cls_only=False, cell_mask=False, cls=True):
+        x = self.patch_embed(x, cls) # patch embed and pos encoding
         
-        if masks is not None and not return_cls_only:
+        if masks is not None and not return_cls_only and not cell_mask:
             x = apply_mask(x, masks) # only needed when entering with student model
+        elif masks is not None and cell_mask == True:
+            ## used when pdl1 cell context mask is given
+            x = torch.gather(x, dim=1, index=masks)
 
         for block in self.encoder:
             x = block(x)
