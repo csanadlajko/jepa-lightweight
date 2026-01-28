@@ -87,13 +87,10 @@ class PDL1Dataset(Dataset):
             boxes.append([x*scale_x, y*scale_y, w*scale_x, h*scale_y])
             labels.append(ann["category_id"])
 
-        boxes = torch.tensor(boxes, dtype=torch.float32)
-        labels = torch.tensor(labels, dtype=torch.int64)
-
         target = {
             "boxes": boxes,
             "labels": labels,
-            "image_id": torch.tensor([img_id])
+            "image_id": img_id
         }
 
         if self.transforms:

@@ -20,10 +20,11 @@ def parse_jepa_args():
     parser.add_argument("--patch_size", help="patch size in pixels used when processing images (default: 16)", default=16, type=int)
     parser.add_argument("--debug", help="run training in debug mode (default: y)", default="y", type=str)
     parser.add_argument("--result_folder", help="name of the result folder where checkpoints and results are created (default: results)", default="results", type=str)
-    parser.add_argument("--dataset", help="name of the training and testing dataset (default: cifar10), possible values: cifar10, cifar10dot1, mri, lung-cancer", default="cifar10", type=str)
+    parser.add_argument("--dataset", help="name of the training and testing dataset (default: cifar10), possible values: cifar10, cifar10dot1, mri, lung-cancer, pdl1", default="cifar10", type=str)
     parser.add_argument("--dataset_input", help="name of input folder of a third party dataset default: ''", default="", type=str)
     parser.add_argument("--reverse_transform", help="switches the transformation between the train and test dataset (default: y)", default="n", type=str)
     parser.add_argument("--annotation_path", help="path of the annontation file(s) (default: '')", default="", type=str)
+    parser.add_argument("--cell_percentage", help="percentage of cells to observe when masking target (defult: 20%)", default=20, type=int)
 
     args = parser.parse_args()
 

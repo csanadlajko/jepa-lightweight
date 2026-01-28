@@ -3,6 +3,7 @@ from multiprocessing import Value
 import torch
 from src.parser.parser import parse_jepa_args
 from typing import Any
+import random
 
 args = parse_jepa_args()
 
@@ -23,19 +24,14 @@ class CellMask(object):
 
     def __init__(
             self,
-            bbox_list: list[list[Any]], ## list of boundig boxes per image [x, y, w, h]
             input_size=(args.image_size, args.image_size),
-            patch_size=args.patch_size,
-            ctx_mask_scale=(0.2, 0.8)
+            patch_size=args.patch_size
         ):
         if isinstance(input_size, int):
             input_size = (input_size, input_size)
-
         self.height = input_size[0] // patch_size
         self.width = input_size[1] // patch_size
         self.patch_size = patch_size
-        self.ctx_mask_scale = ctx_mask_scale
-        self.bbox_list = bbox_list
         self.num_pathes = self.height * self.width
 
     def _get_patch_indices_by_coordinates(
@@ -60,16 +56,25 @@ class CellMask(object):
             x_1, y_1 = bottom_right_patch_index
 
             ## cover the whole block by top left and bottom right patch indices
-            for y in range(int(y_0), int(y_1) + 1):
-                for x in range(int(x_0), int(x_1) + 1):
+            for y in range(int(y_0), int(y_1)):
+                for x in range(int(x_0), int(x_1)):
                     ## transform from patch coordinates to flattened patch index
                     idx = (self.width * y) + x
-                    patch_indices.add(torch.tensor([idx]))
-
+                    patch_indices.add(idx)
         return list(patch_indices)
     
-    def __call__(self, batch):
-        pass
+    def __call__(self, cell_percentage, bbox):
+        """
+        Covers ``cell_percentage`` of the given cells, uses the rest as the context space.
+        """
+        all_target_cells = self._get_patch_indices_by_coordinates(bbox)
+        pct = float(cell_percentage / 100)
+        selected_numer = int(len(all_target_cells) * pct)
+        sampled_target_cells = random.sample(all_target_cells, selected_numer)
+        sample_set = set(sampled_target_cells)
+        unchoosen = torch.tensor([[idx] for idx in all_target_cells if idx not in sample_set])
+        target_list = [torch.tensor(idx) for idx in sampled_target_cells]
+        return unchoosen, target_list
 
 
 class Mask(object):
