@@ -44,9 +44,11 @@ class CellMask(object):
         """
         ## a list for containing all the patch indices for every image in the batch
         batch_patch_indices: list[list] = []
+        batch_labels: list[list] = []
         for annotation in annotation_batch:
             patch_indices = set()
-            for box in annotation["boxes"]:
+            label_map = {}
+            for i, box in enumerate(annotation["boxes"]):
                 x, y, w, h = box ## x, y top left; w, h width-height (not bottom right corner!!!)
 
                 ## transform from regular coordinates to patch coordinates
@@ -62,38 +64,46 @@ class CellMask(object):
                         ## transform from patch coordinates to flattened patch index
                         idx = (self.width * y) + x
                         patch_indices.add(idx)
+                        label_map[idx] = annotation["labels"][i]
             batch_patch_indices.append(list(patch_indices))
-        return batch_patch_indices
+            batch_labels.append(list(label_map.values()))
+        return batch_patch_indices, batch_labels
     
-    def __call__(self, cell_percentage, bbox, embed_dim):
+    def __call__(self, cell_percentage, bbox):
         """
         Covers ``cell_percentage`` of the given cells, uses the rest as the context space.
         """
         ## len(batch_size) list (B, K) where K is the number of found patches per image
         ## contains patch indices for each image in the batch
-        all_target_cells: list[list] = self._get_patch_indices_by_coordinates(bbox)
+        all_target_cells, target_labels = self._get_patch_indices_by_coordinates(bbox)
         pct = float(cell_percentage / 100)
         ## (B, K) filtered list for target patches
         selected_target_patches: list = []
+        selected_target_labels: list = []
         ## (B, K) filtered list for context pacthes
         remaining_context_patches: list = []
-        for image in all_target_cells:
+        remaining_context_labels: list = []
+        ## might not be in sync
+        for image, labels in zip(all_target_cells, target_labels):
             selected_number = int(len(image) * pct)
-            sample = random.sample(image, selected_number)
-            selected_target_patches.append([torch.tensor(sample)])
-            sample_set = set(sample)
+            sample_indices = random.sample(range(len(image)), selected_number)
+            sample_target = [image[i] for i in sample_indices]
+            target_labels = [labels[i] for i in sample_indices]
+            selected_target_labels.append(target_labels)
+            selected_target_patches.append([torch.tensor(sample_target)])
+            sample_set = set(sample_target)
+            label_set = set(target_labels)
             unchoosen = [idx for idx in image if idx not in sample_set]
+            context_labels = [label for label in labels if label not in label_set]
+            remaining_context_labels.append(context_labels)
             remaining_context_patches.append([torch.tensor(unchoosen)])
-        ## issue -> at (B, K), K should be constant for every image
-        ## otherwise it can not be processed as a tensor
-        # selected_target_patches = torch.tensor(selected_target_patches, dtype=torch.long, device=device)
-        # remaining_context_patches = torch.tensor(remaining_context_patches, dtype=torch.long, device=device)
 
-        ## expand both target and context indices to embed dimension for easier indexing
-        ## (B, K) -> (B, K, D)
-        # target_indices = torch.unsqueeze(-1).expand(-1, -1, embed_dim)
-        # context_indices = torch.unsqueeze(-1).expand(-1, -1, embed_dim)
-        return remaining_context_patches, selected_target_patches
+        return {
+            "context_patch_indices": remaining_context_patches,
+            "context_patch_labels": remaining_context_labels,
+            "target_patch_indices": selected_target_patches,
+            "target_patch_labels": selected_target_labels
+        }
 
 
 class Mask(object):
@@ -280,7 +290,6 @@ class Mask(object):
         return collated_batch, masked_ctx_batch, masked_target_batch
     
 def apply_mask(x, mask_indices: list[torch.Tensor], predictor=False):
-    print(x.shape)
     if isinstance(mask_indices, list):
         all_masked_tokens = []
         for i, mask_idx in enumerate(mask_indices):
@@ -302,7 +311,6 @@ def apply_mask(x, mask_indices: list[torch.Tensor], predictor=False):
                 masked_tokens = x[i:i+1].index_select(1, indices) ## needed for cls token
                 all_masked_tokens.append(masked_tokens)
         ## ??? empty batches are possible ????
-        print([item.shape for item in all_masked_tokens])
         return torch.cat(all_masked_tokens, dim=1).to(device)
     else:
         return x.index_select(1, mask_indices)

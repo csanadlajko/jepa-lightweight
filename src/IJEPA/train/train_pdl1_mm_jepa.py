@@ -31,7 +31,12 @@ def train_pdl1(teacher_mod,
 
         ## acquire context and target cell masks for current batch (patch indices)
         ## size: len(batch)
-        context_mask_indices, target_mask_indices = cell_mask(cell_percentage, annotation, student_mod.patch_embed.embed_dim)
+        mask_meta = cell_mask(cell_percentage, annotation)
+
+        target_mask_indices = mask_meta["target_patch_indices"]
+        context_mask_indices = mask_meta["context_patch_indices"]
+        target_patch_labels = mask_meta["target_patch_labels"]
+        context_patch_labels = mask_meta["context_patch_labels"]
 
 
         with torch.no_grad():
@@ -44,11 +49,16 @@ def train_pdl1(teacher_mod,
         ## create context student tokens
         student_tokens = student_mod(images, masks=context_mask_indices, cls=False, cell_mask=True)
 
+        ## label handling should be the following:
+        ## every target patch / block should receive multimodality
+        ## but that would not be computationally efficient at all (in case of more targets it takes a lot of time)
+
+
         predicted_target_tokens = predictor(
             student_tokens, 
             context_mask_indices, 
             target_mask_indices, 
-            annotation["labels"],
+            target_patch_labels,
             multimodal, 
             return_cls_only=False,
             cell_mask=True
