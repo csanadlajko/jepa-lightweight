@@ -73,27 +73,27 @@ class CellMask(object):
         ## contains patch indices for each image in the batch
         all_target_cells: list[list] = self._get_patch_indices_by_coordinates(bbox)
         pct = float(cell_percentage / 100)
-        selected_number = int(len(all_target_cells) * pct)
         ## (B, K) filtered list for target patches
         selected_target_patches: list = []
         ## (B, K) filtered list for context pacthes
         remaining_context_patches: list = []
         for image in all_target_cells:
+            selected_number = int(len(image) * pct)
             sample = random.sample(image, selected_number)
-            selected_target_patches.append(sample)
+            selected_target_patches.append([torch.tensor(sample)])
             sample_set = set(sample)
             unchoosen = [idx for idx in image if idx not in sample_set]
-            remaining_context_patches.append(unchoosen)
+            remaining_context_patches.append([torch.tensor(unchoosen)])
         ## issue -> at (B, K), K should be constant for every image
         ## otherwise it can not be processed as a tensor
-        selected_target_patches = torch.tensor(selected_target_patches, dtype=torch.long, device=device)
-        remaining_context_patches = torch.tensor(remaining_context_patches, dtype=torch.long, device=device)
+        # selected_target_patches = torch.tensor(selected_target_patches, dtype=torch.long, device=device)
+        # remaining_context_patches = torch.tensor(remaining_context_patches, dtype=torch.long, device=device)
 
         ## expand both target and context indices to embed dimension for easier indexing
         ## (B, K) -> (B, K, D)
-        target_indices = torch.unsqueeze(-1).expand(-1, -1, embed_dim)
-        context_indices = torch.unsqueeze(-1).expand(-1, -1, embed_dim)
-        return context_indices, target_indices
+        # target_indices = torch.unsqueeze(-1).expand(-1, -1, embed_dim)
+        # context_indices = torch.unsqueeze(-1).expand(-1, -1, embed_dim)
+        return remaining_context_patches, selected_target_patches
 
 
 class Mask(object):
@@ -280,6 +280,7 @@ class Mask(object):
         return collated_batch, masked_ctx_batch, masked_target_batch
     
 def apply_mask(x, mask_indices: list[torch.Tensor], predictor=False):
+    print(x.shape)
     if isinstance(mask_indices, list):
         all_masked_tokens = []
         for i, mask_idx in enumerate(mask_indices):
@@ -300,6 +301,8 @@ def apply_mask(x, mask_indices: list[torch.Tensor], predictor=False):
                 indices = torch.cat([torch.tensor([0], device=device), patch_idx]) if conc==True else patch_idx
                 masked_tokens = x[i:i+1].index_select(1, indices) ## needed for cls token
                 all_masked_tokens.append(masked_tokens)
-        return torch.cat(all_masked_tokens, dim=0).to(device)
+        ## ??? empty batches are possible ????
+        print([item.shape for item in all_masked_tokens])
+        return torch.cat(all_masked_tokens, dim=1).to(device)
     else:
         return x.index_select(1, mask_indices)

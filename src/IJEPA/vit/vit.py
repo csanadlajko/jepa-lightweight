@@ -212,7 +212,7 @@ class VisionTransformer(nn.Module):
             x = apply_mask(x, masks) # only needed when entering with student model
         elif masks is not None and cell_mask == True:
             ## used when pdl1 cell context mask is given
-            x = torch.gather(x, dim=1, index=masks)
+            x = apply_mask(x, masks, predictor=True)
 
         for block in self.encoder:
             x = block(x)

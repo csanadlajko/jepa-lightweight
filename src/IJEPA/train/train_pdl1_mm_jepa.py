@@ -1,5 +1,5 @@
 import torch
-from src.IJEPA.mask.masking import CellMask
+from src.IJEPA.mask.masking import CellMask, apply_mask
 from src.IJEPA.train.train_ijepa import _ema_update
 import torch.nn.functional as F
 
@@ -30,13 +30,16 @@ def train_pdl1(teacher_mod,
         images = images.to(device)
 
         ## acquire context and target cell masks for current batch (patch indices)
+        ## size: len(batch)
         context_mask_indices, target_mask_indices = cell_mask(cell_percentage, annotation, student_mod.patch_embed.embed_dim)
-        
+
+
         with torch.no_grad():
             ## create teacher tokens for full image
             teacher_tokens = teacher_mod(images, cls=False)
             teacher_tokens = F.layer_norm(teacher_tokens, (teacher_tokens.size(-1),))
-            teacher_target_tokens = teacher_tokens[target_mask_indices]
+            teacher_target_tokens = apply_mask(teacher_tokens, target_mask_indices, predictor=True)
+
 
         ## create context student tokens
         student_tokens = student_mod(images, masks=context_mask_indices, cls=False, cell_mask=True)
