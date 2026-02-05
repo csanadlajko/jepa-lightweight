@@ -67,11 +67,8 @@ class ViTPredictor(nn.Module):
         
         x = self.predictor_embed(x)
         
-        ## select target positions excluding the cls token
-        if cell_mask==False:
-            target_positions = apply_mask(self.pred_pos_embed.repeat(B, 1, 1), target_mask, predictor=True)
-        else: 
-            target_positions = torch.gather(self.pred_pos_embed.repeat(B, 1, 1), dim=1, index=target_mask)
+
+        target_positions = apply_mask(self.pred_pos_embed.repeat(B, 1, 1), target_mask, predictor=True)
 
         num_target_tokens = target_positions.size(1)
         mask_tokens = self.mask_token.repeat(target_positions.size(0), num_target_tokens, 1)
@@ -212,7 +209,7 @@ class VisionTransformer(nn.Module):
             x = apply_mask(x, masks) # only needed when entering with student model
         elif masks is not None and cell_mask == True:
             ## used when pdl1 cell context mask is given
-            x = torch.gather(x, dim=1, index=masks)
+            x = apply_mask(x, masks, predictor=True)
 
         for block in self.encoder:
             x = block(x)
