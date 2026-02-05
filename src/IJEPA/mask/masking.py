@@ -308,7 +308,7 @@ def apply_mask(x, mask_indices: list[torch.Tensor], predictor=False):
                     patch_idx = all_idx ## dont shift when using predictor -> not predicting cls token
                 ## concat cls when working with context blocks otherwise only shift indices to right
                 indices = torch.cat([torch.tensor([0], device=device), patch_idx]) if conc==True else patch_idx
-                masked_tokens = x[i:i+1].index_select(1, indices) ## needed for cls token
+                masked_tokens = torch.index_select(x, 1, indices)
                 all_masked_tokens.append(masked_tokens)
         ## ??? empty batches are possible ????
         return torch.cat(all_masked_tokens, dim=1).to(device)
