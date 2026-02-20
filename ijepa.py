@@ -86,13 +86,23 @@ if __name__ == "__main__":
         num_heads=args.num_heads,
         depth=args.depth,
         mlp_dim=args.mlp_dim,
-        drop_rate=args.drop_rate,
+        drop_rate=args.teacher_dropout,
         num_classes=args.num_classes
-    )
+    ).to(device)
 
-    student_model = copy.deepcopy(teacher_model)
+    student_model = VisionTransformer(
+        img_size=args.image_size,
+        patch_size=args.patch_size,
+        in_chans=args.channels,
+        embed_dim=args.embed_dim,
+        num_heads=args.num_heads,
+        depth=args.depth,
+        mlp_dim=args.mlp_dim,
+        drop_rate=args.student_dropout,
+        num_classes=args.num_classes
+    ).to(device)
 
-    text_encoder = AutoModelForCausalLM.from_pretrained(args.sentence_encoder)
+    text_encoder = AutoModelForCausalLM.from_pretrained(args.sentence_encoder).to(device)
     tokenizer = AutoTokenizer.from_pretrained(args.sentence_encoder)
 
     if tokenizer.pad_token is None:
@@ -107,7 +117,7 @@ if __name__ == "__main__":
         tokenizer=tokenizer,
         text_encoder=text_encoder,
         num_classes=args.num_classes
-    )
+    ).to(device)
 
     teacher_model.apply(init_weights)
     student_model.apply(init_weights)
@@ -121,11 +131,7 @@ if __name__ == "__main__":
     )
 
     student_scheduler = model_config["student_scheduler"]
-
-    teacher_model.to(device)
-    student_model.to(device)
-    predictor.to(device)
-
+    
     print(f"total number of parameters approx.: {sum(p.numel() for p in student_model.parameters()) + sum(p.numel() for p in teacher_model.parameters()) + sum(p.numel() for p in predictor.parameters())}")
     print(f"Which from are trainable parameters: {sum(p.numel() for p in student_model.parameters() if p.requires_grad) + sum(p.numel() for p in teacher_model.parameters() if p.requires_grad) + sum(p.numel() for p in predictor.parameters() if p.requires_grad)}")
 

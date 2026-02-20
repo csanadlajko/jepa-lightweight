@@ -6,6 +6,8 @@ import datetime
 import matplotlib.pyplot as plt
 from torchviz import make_dot
 
+from tqdm import tqdm
+
 run_identifier: str = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -31,11 +33,12 @@ def train(teacher_mod,
     student_mod.train()
     predictor.train()
 
-    print("---STARTING EPOCH---")
     total_loss = 0.0
     num_batches = 0
 
-    for batch_idx, (images, labels) in enumerate(loader):
+    bar = tqdm(total=len(loader))
+
+    for (images, labels) in loader:
         images = images.to(device)
         labels = labels.to(device)
         
@@ -68,10 +71,15 @@ def train(teacher_mod,
         total_loss += loss_curr.item() 
         num_batches += 1
 
+        bar.update(1)
+
+
     print("---EPOCH ENDED---")
     
     avg_loss = total_loss / num_batches if num_batches > 0 else 0.0
     print(f"Average training loss: {avg_loss:.4f}")
+
+    bar.close()
 
     return avg_loss
 
@@ -84,7 +92,6 @@ def train_cls(student_model,
     student_model.eval() # freeze trained student model
     predictor.train()
     
-    print("---STARTING CLS TRAINING---")
     total_loss = 0.0
     num_batches = 0
     correct_predictions = 0
@@ -95,6 +102,8 @@ def train_cls(student_model,
             param.requires_grad = False
         else:
             param.requires_grad = True
+
+    bar = tqdm(total=len(train_dataset))
     
     for batch_idx, (images, labels) in enumerate(train_dataset):
         images = images.to(device)
@@ -121,6 +130,8 @@ def train_cls(student_model,
         total_loss += loss.item()
         num_batches += 1
 
+        bar.update(1)
+
         if batch_idx % 500 == 0:
             current_acc = correct_predictions / total_predictions
             print(f"CLS Loss at batch {batch_idx}: {loss.item():.4f}, Accuracy: {current_acc:.4f}")
@@ -129,6 +140,8 @@ def train_cls(student_model,
     avg_loss = total_loss / num_batches if num_batches > 0 else 0.0
     print(f"Average CLS training loss: {avg_loss:.4f}")
     print("---CLS TRAINING ENDED---")
+
+    bar.close()
 
     return avg_loss, current_acc * 100
 
@@ -143,6 +156,8 @@ def eval_cls(model,
     predictor.eval()
     total_correct = 0
     total_samples = 0
+
+    bar = tqdm(total=len(test_dataset))
     
     print("---STARTING CLS EVALUATION---")
     
@@ -161,12 +176,13 @@ def eval_cls(model,
             
             total_correct += (predicted == labels).sum().item()
             total_samples += labels.size(0)
+            bar.update(1)
             
             if batch_idx % 50 == 0:
                 current_acc = total_correct / total_samples
                 print(f"Batch {batch_idx}, Current accuracy: {current_acc:.4f}")
             
-    
+    bar.close()
     final_accuracy = total_correct / total_samples
     print(f"---CLS EVALUATION ENDED---")
     print(f"Final CLS accuracy: {final_accuracy:.4f}")

@@ -3,7 +3,8 @@ from argparse import ArgumentParser
 def parse_jepa_args():
     parser = ArgumentParser(description="train JEPA model")
     parser.add_argument("--depth", help="depth of ViT model (default: 6)", default=6, type=int)
-    parser.add_argument("--drop_rate", help="drop rate of ViT model (default: 0.1)", default=0.1, type=float)
+    parser.add_argument("--student_dropout", help="dropout rate for student ViT model (default: 0.1)", default=0.1, type=float)
+    parser.add_argument("--teacher_dropout", help="dropout rate for teacher ViT model (default: 0.2)", default=0.2, type=float)
     parser.add_argument("--channels", help="num of color channels of the input image (default: 3)", default=3, type=int)
     parser.add_argument("--image_size", help="size of input image (default: 128)", default=128, type=int)
     parser.add_argument("--embed_dim", help="embedding dimension for the ViT model (default: 256)", default=256, type=int)
@@ -19,10 +20,10 @@ def parse_jepa_args():
     parser.add_argument("--multimodal_run", help="run model in multimodal mode (default: y)", default="y", type=str)
     parser.add_argument("--patch_size", help="patch size in pixels used when processing images (default: 16)", default=16, type=int)
     parser.add_argument("--debug", help="run training in debug mode (default: y)", default="y", type=str)
-    parser.add_argument("--result_folder", help="name of the result folder where checkpoints and results are created (default: results)", default="results", type=str)
+    parser.add_argument("--result_folder", help="name of the result folder where checkpoints and results are created (default: results)", default="/results", type=str)
     parser.add_argument("--dataset", help="name of the training and testing dataset (default: cifar10), possible values: cifar10, cifar10dot1, mri, lung-cancer, pdl1", default="cifar10", type=str)
     parser.add_argument("--dataset_input", help="name of input folder of a third party dataset default: ''", default="", type=str)
-    parser.add_argument("--reverse_transform", help="switches the transformation between the train and test dataset (default: y)", default="n", type=str)
+    parser.add_argument("--reverse_transform", help="switches the transformation between the train and test dataset (default: n)", default="n", type=str)
     parser.add_argument("--annotation_path", help="path of the annontation file(s) (default: '')", default="", type=str)
     parser.add_argument("--cell_percentage", help="percentage of cells to observe when masking target (defult: 20%)", default=20, type=int)
 
