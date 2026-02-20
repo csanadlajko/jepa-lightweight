@@ -15,18 +15,24 @@ for (images, annotations) in train_loader:
 
     image = images[0]
     bboxes = annotations["boxes"][0]
+    labels = annotations["labels"][0]
+
+    final_bbox = []
+    for i, label in enumerate(labels):
+        if label.item() == 2: ## only show cancer cells
+            final_bbox.append(bboxes[i])
 
     img = image.permute(1, 2, 0).cpu().numpy()
     img = np.ascontiguousarray(img)
 
-    for box in bboxes:
+    for box in final_bbox:
         x_min, y_min, x_max, y_max = map(int, box)
         cv2.rectangle(img, (x_min, y_min), (x_max, y_max), (255, 0, 0), 1)
 
     plt.figure(figsize=(8,8))
     plt.imshow(img)
     plt.axis("off")
-    plt.title(f"BBoxes: {len(bboxes)}")
+    plt.title(f"tumor bboxes: {len(final_bbox)}")
     plt.show()
 
     break
