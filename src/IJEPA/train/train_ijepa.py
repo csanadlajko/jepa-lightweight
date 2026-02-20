@@ -80,7 +80,7 @@ def train_cls(student_model,
               predictor, 
               optim_cls, 
               cls_loss, 
-              multimodal=True):
+              multimodal=False):
     student_model.eval() # freeze trained student model
     predictor.train()
     
@@ -135,7 +135,7 @@ def train_cls(student_model,
 def eval_cls(model, 
             test_dataset,
             predictor,
-            multimodal=True):
+            multimodal=False):
     """
     Evaluate the model using CLS token classification
     """
@@ -182,7 +182,7 @@ def show_loss_per_epoch(jepa_loss_epoch_list: list[int], cls_loss_per_epoch: lis
     plt.title('Loss over epochs')
     plt.legend()
     plt.grid(True)
-    plt.savefig(f'/{result_folder}/jepa_loss_plot_{run_id}.png', dpi=500)
+    plt.savefig(f'{result_folder}/jepa_loss_plot_{run_id}.png', dpi=500)
     plt.show()
 
 def show_cls_data_per_epoch(accuracy_per_epoch: list[int], run_id: str, result_folder: str):
@@ -194,5 +194,5 @@ def show_cls_data_per_epoch(accuracy_per_epoch: list[int], run_id: str, result_f
     plt.title("CLS accuracy per epoch (%)")
     plt.legend()
     plt.grid(True)
-    plt.savefig(f'/{result_folder}/cls_accuracy_plot_{run_id}.png', dpi=300)
+    plt.savefig(f'{result_folder}/cls_accuracy_plot_{run_id}.png', dpi=300)
     plt.show()

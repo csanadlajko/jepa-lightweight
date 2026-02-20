@@ -172,32 +172,37 @@ if __name__ == "__main__":
         jepa_loss_per_epoch.append(loss_epoch)
     
     if args.debug == "y":
-        torch.save(student_model.state_dict(), f"/{result_folder}/trained_student_jepa_{run_identifier}.pth")
-        torch.save(teacher_model.state_dict(), f"/{result_folder}/teacher_model_jepa_{run_identifier}.pth")
-        torch.save(predictor.state_dict(), f"/{result_folder}/trained_predictor_jepa_{run_identifier}.pth")
+        torch.save(student_model.state_dict(), f"{result_folder}/trained_student_jepa_{run_identifier}.pth")
+        torch.save(teacher_model.state_dict(), f"{result_folder}/teacher_model_jepa_{run_identifier}.pth")
+        torch.save(predictor.state_dict(), f"{result_folder}/trained_predictor_jepa_{run_identifier}.pth")
 
 
     for epoch in range(args.epochs):
         print(f"\n=== CLS EPOCH {epoch+1}/{args.epochs} ===")
         cls_loss_at_epoch, accuracy_epoch = train_cls(
-            student_model, 
-            train_loader, 
-            predictor,
-            model_config["optim_cls"],
-            model_config["cls_loss"],
-            args.multimodal_run
+            student_model=student_model, 
+            train_dataset=train_loader, 
+            predictor=predictor,
+            optim_cls=model_config["optim_cls"],
+            cls_loss=model_config["cls_loss"],
+            multimodal=False ## false in every case to prevent leakage !!
         )
         accuracy_per_epoch.append(accuracy_epoch)
         cls_loss_per_epoch.append(cls_loss_at_epoch)
     
     if args.debug == "y":
-        torch.save(student_model.state_dict(), f"/{result_folder}/trained_student_cls_{run_identifier}.pth")
-        torch.save(teacher_model.state_dict(), f"/{result_folder}/teacher_model_cls_{run_identifier}.pth")
-        torch.save(predictor.state_dict(), f"/{result_folder}/trained_predictor_cls_{run_identifier}.pth")
+        torch.save(student_model.state_dict(), f"{result_folder}/trained_student_cls_{run_identifier}.pth")
+        torch.save(teacher_model.state_dict(), f"{result_folder}/teacher_model_cls_{run_identifier}.pth")
+        torch.save(predictor.state_dict(), f"{result_folder}/trained_predictor_cls_{run_identifier}.pth")
 
     print("\n=== FINAL EVALUATION ===")
     
-    cls_acc = eval_cls(student_model, test_loader, predictor, args.multimodal_run)
+    cls_acc = eval_cls(
+        model=student_model, 
+        test_dataset=test_loader, 
+        predictor=predictor, 
+        multimodal=False ## false in every case to prevent leakage !!
+    )
 
     show_loss_per_epoch(jepa_loss_per_epoch, cls_loss_per_epoch, run_identifier, result_folder)
     show_cls_data_per_epoch(accuracy_per_epoch, run_identifier, result_folder)
