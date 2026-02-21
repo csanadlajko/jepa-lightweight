@@ -1,5 +1,5 @@
-from src.IJEPA.mask.masking import Mask
-from src.IJEPA.mask.masking import apply_mask
+from ..utils.masking import apply_mask
+from ..utils.ema import _ema_update
 import torch
 import torch.nn.functional as F
 import datetime
@@ -10,23 +10,16 @@ from tqdm import tqdm
 
 run_identifier: str = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
 
-device = "cuda" if torch.cuda.is_available() else "cpu"
-
-mask = Mask()
-
-@torch.no_grad()
-def _ema_update(teacher_mod, student_mod, momentum=0.996):
-    for t_param, s_param in zip(teacher_mod.parameters(), student_mod.parameters()):
-        t_param.data.mul_(momentum).add_(s_param.data, alpha=1.0 - momentum)
-
 def train(teacher_mod, 
-          student_mod, 
+          student_mod,
           loader, 
           optim_student, 
           optim_predictor, 
           predictor, 
           momentum, 
           ijepa_loss,
+          device,
+          mask,
           multimodal=True,
           debug="n"):
     teacher_mod.eval()
@@ -83,11 +76,13 @@ def train(teacher_mod,
 
     return avg_loss
 
-def train_cls(student_model, 
-              train_dataset, 
-              predictor, 
-              optim_cls, 
-              cls_loss, 
+def train_cls(student_model,
+              train_dataset,
+              predictor,
+              optim_cls,
+              cls_loss,
+              device,
+              mask,
               multimodal=False):
     student_model.eval() # freeze trained student model
     predictor.train()
@@ -148,6 +143,8 @@ def train_cls(student_model,
 def eval_cls(model, 
             test_dataset,
             predictor,
+            device,
+            mask,
             multimodal=False):
     """
     Evaluate the model using CLS token classification

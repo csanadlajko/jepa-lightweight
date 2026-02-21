@@ -1,11 +1,13 @@
 import torch
 import matplotlib.pyplot as plt
 import numpy as np
-from src.IJEPA.mask.masking import Mask, apply_mask
-from src.IJEPA.transform.datatransform import get_cifarten_dataset
+from src.utils.masking import Mask
+from src.data_preprocess.dataloader import get_cifarten_dataset
 from src.parser.parser import parse_jepa_args
 
 args = parse_jepa_args()
+
+device = "cuda" if torch.cuda.is_available() else "cpu"
 
 train_loader, test_loader = get_cifarten_dataset()
 
@@ -84,7 +86,7 @@ def visualize_masks(images, context_masks, target_masks, num_samples=4):
     return fig
 
 if __name__ == "__main__":
-    mask = Mask()
+    mask = Mask(device=device)
     
     for images, labels in train_loader:
         images = images.cuda() if torch.cuda.is_available() else images

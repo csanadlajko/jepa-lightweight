@@ -2,8 +2,6 @@
 
 import torch
 
-device = "cuda" if torch.cuda.is_available() else "cpu"
-
 def get_x_positions(num_patches, start_idx=0):
     num_patches_ = int(num_patches ** 0.5) # number of patches in the x dimension
 
@@ -33,7 +31,7 @@ def generate_sinusoidal_1d(position_sequence, embed_dim):
 
     return pos_embedding
 
-def sinusoidal_pos_embedding2d(num_patches, embed_dim):
+def sinusoidal_pos_embedding2d(num_patches, embed_dim, device):
     x_positions = get_x_positions(num_patches).reshape(-1, 1)
     x_pos_embeddings = generate_sinusoidal_1d(x_positions, embed_dim)
 

@@ -1,67 +1,29 @@
 from src.parser.parser import parse_jepa_args
-from src.IJEPA.vit.vit import VisionTransformer, ViTPredictor
-from src.IJEPA.train.train_ijepa import (
+from src.models.vit import VisionTransformer
+from src.models.predictor import ViTPredictor
+from src.train.train_ijepa import (
     train, # main JEPA training loop for creating the representational space
     train_cls, # CLS token supervised training loop
     show_cls_data_per_epoch, # cls accuracy plot
     show_loss_per_epoch, # cls loss plot
     eval_cls # cls evalutaion on the test dataset
 )
-from src.IJEPA.train.train_pdl1_mm_jepa import (
+from src.train.train_pdl1_mm_jepa import (
     train_pdl1 ## train JEPA model on PDL1 cell dataset
 )
-from src.IJEPA.transform.datatransform import (
-    get_cifar_tendotone_dataset, 
-    get_cifarten_dataset, 
-    get_mri_dataset, 
-    get_lung_cancer_dataset,
-    get_pdl1_dataset
-)
-from src.IJEPA.config_ijepa import get_model_config
+from src.data_preprocess.dataloader import load_dataset
+from src.utils.config_ijepa import get_model_config, init_weights
+from src.utils.masking import Mask, CellMask
 from transformers import AutoTokenizer, AutoModelForCausalLM
 import torch
-import copy
 import datetime
 import torch
-import torch.nn as nn
 
 args = parse_jepa_args()
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
-def init_weights(m):
-    if isinstance(m, nn.Linear):
-        torch.nn.init.xavier_uniform_(m.weight)
-        if m.bias is not None:
-            torch.nn.init.zeros_(m.bias)
-    elif isinstance(m, nn.LayerNorm):
-        torch.nn.init.ones_(m.weight)
-        torch.nn.init.zeros_(m.bias)
-
-def get_dataset(dataset_name: str, input_folder: str = "", reverse: str = "n"):
-    datasets = {}
-    if dataset_name == "cifar10":
-        train_loader, test_loader = get_cifarten_dataset(reverse)
-        datasets["train_loader"] = train_loader
-        datasets["test_loader"] = test_loader
-    elif dataset_name == "cifar10dot1":
-        train_loader, test_loader = get_cifar_tendotone_dataset(input_folder)
-        datasets["train_loader"] = train_loader
-        datasets["test_loader"] = test_loader
-    elif dataset_name == "mri":
-        train_loader, test_loader = get_mri_dataset(input_folder, reverse)
-        datasets["train_loader"] = train_loader
-        datasets["test_loader"] = test_loader
-    elif dataset_name == "lung-cancer":
-        train_loader, test_loader = get_lung_cancer_dataset(input_folder, reverse)
-        datasets["train_loader"] = train_loader
-        datasets["test_loader"] = test_loader
-    elif dataset_name == "pdl1":
-        train_loader, test_loader = get_pdl1_dataset(input_folder, args.annotation_path, reverse)
-        datasets["train_loader"] = train_loader
-        datasets["test_loader"] = test_loader
-    else:
-        datasets["error"] = "Dataset has not been registered yet for JEPA model!"
-    return datasets
+mask = Mask(device=device)
+cell_mask = CellMask(device=device)
 
 if __name__ == "__main__":
     jepa_loss_per_epoch = []
@@ -71,7 +33,7 @@ if __name__ == "__main__":
     run_identifier: str = datetime.datetime.now().strftime("%Y-%m-%dT%H%M%SZ")
     result_folder: str = args.result_folder
 
-    datasets = get_dataset(args.dataset, args.dataset_input, args.reverse_transform)
+    datasets = load_dataset(args.dataset, args.dataset_input, args.reverse_transform)
 
     if "error" in datasets:
         raise FileNotFoundError(datasets["error"])
@@ -111,6 +73,7 @@ if __name__ == "__main__":
     predictor = ViTPredictor(
         num_patches=teacher_model.patch_embed.num_patches,
         embed_dim=args.embed_dim,
+        device=device,
         pred_dim=args.embed_dim,
         depth=args.depth,
         num_heads=args.num_heads,
@@ -147,32 +110,36 @@ if __name__ == "__main__":
         if args.dataset != "pdl1":
             ## train JEPA on regular classification tasks with cls token
             loss_epoch = train(
-                teacher_model, 
-                student_model, 
-                train_loader, 
-                model_config["optim_student"],
-                model_config["optim_predictor"],
-                predictor,
-                args.momentum,
-                model_config["ijepa_loss"],
-                args.multimodal_run,
-                args.debug
+                teacher_mod=teacher_model, 
+                student_mod=student_model, 
+                loader=train_loader, 
+                optim_student=model_config["optim_student"],
+                optim_predictor=model_config["optim_predictor"],
+                predictor=predictor,
+                momentum=args.momentum,
+                ijepa_loss=model_config["ijepa_loss"],
+                device=device,
+                mask=mask,
+                multimodal=args.multimodal_run,
+                debug=args.debug
             )
         else:
             ## train JEPA on PDL1 dataset with local representation classification
             print("setting up pdl1 training...")
             text_encoder.eval()
             loss_epoch = train_pdl1(
-                teacher_model, 
-                student_model, 
-                train_loader, 
-                model_config["optim_student"],
-                model_config["optim_predictor"],
-                predictor,
-                args.momentum,
-                model_config["ijepa_loss"],
-                args.multimodal_run,
-                args.cell_percentage
+                teacher_mod=teacher_model, 
+                student_mod=student_model, 
+                loader=train_loader, 
+                optim_student=model_config["optim_student"],
+                optim_predictor=model_config["optim_predictor"],
+                predictor=predictor,
+                momentum=args.momentum,
+                ijepa_loss=model_config["ijepa_loss"],
+                multimodal=args.multimodal_run,
+                cell_percentage=args.cell_percentage,
+                device=device,
+                cell_mask=cell_mask
             )
 
         student_scheduler.step()

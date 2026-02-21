@@ -34,3 +34,12 @@ def get_model_config(student_model, predictor, learning_rate, epochs):
         "cls_loss": nn.CrossEntropyLoss(),
         "student_scheduler": student_scheduler
     }
+
+def init_weights(model):
+    if isinstance(model, nn.Linear):
+        torch.nn.init.xavier_uniform_(model.weight)
+        if model.bias is not None:
+            torch.nn.init.zeros_(model.bias)
+    elif isinstance(model, nn.LayerNorm):
+        torch.nn.init.ones_(model.weight)
+        torch.nn.init.zeros_(model.bias)

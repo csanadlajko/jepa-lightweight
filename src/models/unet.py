@@ -6,11 +6,9 @@ from torch.utils.data.dataloader import DataLoader
 # standard unet model used for tumor segmentation
 # code credit: https://medium.com/data-science/cook-your-first-u-net-in-pytorch-b3297a844cf3
 
-device = "cuda" if torch.cuda.is_available() else "cpu"
-
 class UNet(nn.Module):
 
-    def __init__(self, in_chans, num_classes):
+    def __init__(self, in_chans, num_classes, device):
         super().__init__()
 
         # encoder
@@ -109,8 +107,8 @@ def train_unet(epochs: int, train_loader: DataLoader):
         total_loss: float = 0.0
         print(f"=== Starting epoch: {epoch+1} ===")
         for (imgs, labels) in train_loader:
-            imgs = imgs.to(device)
-            labels = labels.to(device)
+            imgs = imgs.to(unet_model.device)
+            labels = labels.to(unet_model.device)
 
             images = images.permute(0,3,2,1).float()
             labels = labels.permute(0,3,2,1).float()

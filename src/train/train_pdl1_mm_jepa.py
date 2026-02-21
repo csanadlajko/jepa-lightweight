@@ -1,11 +1,7 @@
 import torch
-from src.IJEPA.mask.masking import CellMask, apply_mask
-from src.IJEPA.train.train_ijepa import _ema_update
+from ..utils.masking import apply_mask
+from ..utils.ema import _ema_update
 import torch.nn.functional as F
-
-cell_mask = CellMask()
-
-device = "cuda" if torch.cuda.is_available() else "cpu"
 
 def train_pdl1(teacher_mod, 
           student_mod, 
@@ -15,6 +11,8 @@ def train_pdl1(teacher_mod,
           predictor, 
           momentum, 
           ijepa_loss,
+          device,
+          cell_mask,
           multimodal=True,
           cell_percentage=20):
     

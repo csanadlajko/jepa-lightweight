@@ -9,8 +9,6 @@ args = parse_jepa_args()
 
 DEBUG = True if args.debug == "y" else False
 
-device = "cuda" if torch.cuda.is_available() else "cpu"
-
 class CellMask(object):
 
     """
@@ -24,6 +22,7 @@ class CellMask(object):
 
     def __init__(
             self,
+            device,
             input_size=(args.image_size, args.image_size),
             patch_size=args.patch_size
         ):
@@ -33,6 +32,7 @@ class CellMask(object):
         self.width = input_size[1] // patch_size
         self.patch_size = patch_size
         self.num_pathes = self.height * self.width
+        self.device = device
 
     def _get_patch_indices_by_coordinates(
             self, 
@@ -110,6 +110,7 @@ class Mask(object):
     
     def __init__(
         self,
+        device,
         input_size=(args.image_size, args.image_size),
         patch_size=args.patch_size,
         nctx=1,
@@ -132,6 +133,7 @@ class Mask(object):
         self.aspect_ratio = aspect_ratio
         self.min_keep = min_keep
         self.max_tries = max_tries
+        self.device = device
         self.iteration_counter = Value('i', -1)
         
     def step(self):
@@ -217,7 +219,7 @@ class Mask(object):
             target_mask = []
             for _ in range(self.ntarg):
                 idx, occ = self._place_block_without_overlap(target_h, target_w, occ)
-                idx = idx.to(device)
+                idx = idx.to(self.device)
                 target_mask.append(idx)
             
             free = (occ == 0).to(torch.int32)
@@ -269,7 +271,7 @@ class Mask(object):
                 needed -= take
                     
             all_mask_target.append(target_mask)
-            cmask = cmask.to(device)
+            cmask = cmask.to(self.device)
             all_mask_ctx.append(cmask)
             
         if id_only:
@@ -289,7 +291,7 @@ class Mask(object):
             
         return collated_batch, masked_ctx_batch, masked_target_batch
     
-def apply_mask(x, mask_indices: list[torch.Tensor], predictor=False):
+def apply_mask(x: torch.Tensor, mask_indices: list[torch.Tensor], predictor=False):
     if isinstance(mask_indices, list):
         all_masked_tokens = []
         for i, mask_idx in enumerate(mask_indices):
@@ -307,7 +309,7 @@ def apply_mask(x, mask_indices: list[torch.Tensor], predictor=False):
                 else:
                     patch_idx = all_idx ## dont shift when using predictor -> not predicting cls token
                 ## concat cls when working with context blocks otherwise only shift indices to right
-                indices = torch.cat([torch.tensor([0], device=device), patch_idx]) if conc==True else patch_idx
+                indices = torch.cat([torch.tensor([0], device=x.device), patch_idx]) if conc==True else patch_idx
                 masked_tokens = x[i].index_select(dim=0, index=indices)
                 all_masked_tokens.append(masked_tokens.unsqueeze(0))
         ## ??? empty batches are possible ????
