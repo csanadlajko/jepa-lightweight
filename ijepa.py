@@ -161,6 +161,7 @@ if __name__ == "__main__":
         else:
             ## train JEPA on PDL1 dataset with local representation classification
             print("setting up pdl1 training...")
+            text_encoder.eval()
             loss_epoch = train_pdl1(
                 teacher_model, 
                 student_model, 

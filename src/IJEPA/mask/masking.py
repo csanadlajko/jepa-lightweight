@@ -295,11 +295,11 @@ def apply_mask(x, mask_indices: list[torch.Tensor], predictor=False):
         for i, mask_idx in enumerate(mask_indices):
             if isinstance(mask_idx, list):
                 # enter when selecting target blocks
-                all_idx = torch.cat(mask_idx).to(device)
+                all_idx = torch.cat(mask_idx)
                 conc=False # dont concat when using teacher, only use N patches for masking
             else:
                 # enter when selecting context blocks
-                all_idx = mask_idx.to(device)
+                all_idx = mask_idx
                 conc=True # concat when selecting context blocks for vit and vit predictor
             if all_idx.numel() > 0:
                 if not predictor:
@@ -308,9 +308,9 @@ def apply_mask(x, mask_indices: list[torch.Tensor], predictor=False):
                     patch_idx = all_idx ## dont shift when using predictor -> not predicting cls token
                 ## concat cls when working with context blocks otherwise only shift indices to right
                 indices = torch.cat([torch.tensor([0], device=device), patch_idx]) if conc==True else patch_idx
-                masked_tokens = torch.index_select(x, 1, indices)
-                all_masked_tokens.append(masked_tokens)
+                masked_tokens = x[i].index_select(dim=0, index=indices)
+                all_masked_tokens.append(masked_tokens.unsqueeze(0))
         ## ??? empty batches are possible ????
-        return torch.cat(all_masked_tokens, dim=1).to(device)
+        return torch.cat(all_masked_tokens, dim=0)
     else:
         return x.index_select(1, mask_indices)

@@ -202,9 +202,8 @@ class VisionTransformer(nn.Module):
         ])
         self.norm = nn.LayerNorm(embed_dim)
         
-    def forward(self, x, masks=None, return_cls_only=False, cell_mask=False, cls=True):
+    def forward(self, x: torch.Tensor, masks=None, return_cls_only=False, cell_mask=False, cls=True):
         x = self.patch_embed(x, cls) # patch embed and pos encoding
-        
         if masks is not None and not return_cls_only and not cell_mask:
             x = apply_mask(x, masks) # only needed when entering with student model
         elif masks is not None and cell_mask == True:
