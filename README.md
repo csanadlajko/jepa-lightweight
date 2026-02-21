@@ -1,6 +1,6 @@
-# jepa-lightweight
+# medical-ijepa
 
-The project contains several implementations for JEPA models (I-JEPA, LLM-JEPA, Multimodal-JEPA).
+The project researches a potential multimodal extension of the Image Based Join Embedding Predictive Architecture model, for medical image processing and classification.
 
 Current focus of the project is: Cell classification based on microenvironmental context using I-JEPA and Multimodal (image-text) JEPA.
 
