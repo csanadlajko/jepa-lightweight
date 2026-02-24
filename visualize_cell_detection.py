@@ -1,5 +1,5 @@
 import matplotlib.pyplot as plt
-from src.IJEPA.transform.datatransform import get_pdl1_dataset
+from src.data_preprocess.dataloader import get_pdl1_dataset
 from src.parser.parser import parse_jepa_args
 import cv2
 
