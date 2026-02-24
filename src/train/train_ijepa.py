@@ -127,10 +127,6 @@ def train_cls(student_model,
 
         bar.update(1)
 
-        if batch_idx % 500 == 0:
-            current_acc = correct_predictions / total_predictions
-            print(f"CLS Loss at batch {batch_idx}: {loss.item():.4f}, Accuracy: {current_acc:.4f}")
-
     current_acc = correct_predictions / total_predictions
     avg_loss = total_loss / num_batches if num_batches > 0 else 0.0
     print(f"Average CLS training loss: {avg_loss:.4f}")
@@ -174,10 +170,6 @@ def eval_cls(model,
             total_correct += (predicted == labels).sum().item()
             total_samples += labels.size(0)
             bar.update(1)
-            
-            if batch_idx % 50 == 0:
-                current_acc = total_correct / total_samples
-                print(f"Batch {batch_idx}, Current accuracy: {current_acc:.4f}")
             
     bar.close()
     final_accuracy = total_correct / total_samples
