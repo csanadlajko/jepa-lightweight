@@ -125,12 +125,12 @@ class ViTPredictor(nn.Module):
 
             predicted_tokens = predicted_tokens + pred_attended
 
-            if return_cls_only:
-                # full_img = torch.cat([x[:context_length], predicted_tokens], dim=1) ## create new total image embedding with finetuned target predictions -> not neccesary
-                # we only use the multimodal approach to the predicted target tokens, these do not affect the cls
-                # cls only learns the finetuned embedding by the multimodal learning iterations
-                cls_token = x[:, 0, :] # acquire cls token representing predicted image
-                return self.cls_head(cls_token)
+        if return_cls_only:
+            # full_img = torch.cat([x[:context_length], predicted_tokens], dim=1) ## create new total image embedding with finetuned target predictions -> not neccesary
+            # we only use the multimodal approach to the predicted target tokens, these do not affect the cls
+            # cls only learns the finetuned embedding by the multimodal learning iterations
+            cls_token = x[:, 0, :] # acquire cls token representing predicted image
+            return self.cls_head(cls_token)
         
         return predicted_tokens
 

@@ -159,6 +159,8 @@ if __name__ == "__main__":
             predictor=predictor,
             optim_cls=model_config["optim_cls"],
             cls_loss=model_config["cls_loss"],
+            device=device,
+            mask=mask,
             multimodal=False ## false in every case to prevent leakage !!
         )
         accuracy_per_epoch.append(accuracy_epoch)
@@ -174,7 +176,9 @@ if __name__ == "__main__":
     cls_acc = eval_cls(
         model=student_model, 
         test_dataset=test_loader, 
-        predictor=predictor, 
+        predictor=predictor,
+        device=device,
+        mask=mask,
         multimodal=False ## false in every case to prevent leakage !!
     )
 
