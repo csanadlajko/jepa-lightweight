@@ -86,7 +86,7 @@ class PDL1Dataset(Dataset):
         for ann in annotations:
             x, y, w, h = ann["bbox"]
             boxes.append([x*scale_x, y*scale_y, w*scale_x, h*scale_y])
-            labels.append(ann["category_id"])
+            labels.append(int(ann["category_id"]))
 
         target = {
             "boxes": boxes,
