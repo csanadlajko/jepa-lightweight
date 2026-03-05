@@ -52,7 +52,9 @@ def get_pdl1_dataset(input_dir: str, annotation_file_path: str, reverse: str = "
         dataset=test_data,
         batch_size=args.batch_size,
         shuffle=False,
-        collate_fn=PDL1Dataset.collate_fn
+        collate_fn=PDL1Dataset.collate_fn,
+        num_workers=6,
+        pin_memory=True
     )
     return train_loader, test_loader
 
@@ -96,12 +98,16 @@ def get_cifarten_dataset(reverse: str = "n"):
     train_loader = DataLoader(
         dataset=train_data,
         batch_size=args.batch_size,
-        shuffle=True
+        shuffle=True,
+        num_workers=6,
+        pin_memory=True
     )
     test_loader = DataLoader(
         dataset=test_data,
         batch_size=args.batch_size,
-        shuffle=False
+        shuffle=False,
+        num_workers=6,
+        pin_memory=True
     )
     return train_loader, test_loader
 
