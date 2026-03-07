@@ -77,8 +77,7 @@ class ViTPredictor(nn.Module):
         
         x = self.predictor_embed(x)
         
-
-        target_positions = apply_mask(self.pred_pos_embed.repeat(B, 1, 1), target_mask, predictor=True)
+        target_positions, pad = apply_mask(self.pred_pos_embed.repeat(B, 1, 1), target_mask, predictor=True, use_padding=cell_mask)
 
         num_target_tokens = target_positions.size(1)
         mask_tokens = self.mask_token.repeat(target_positions.size(0), num_target_tokens, 1)
@@ -89,7 +88,7 @@ class ViTPredictor(nn.Module):
         x = torch.cat([context_tokens_repeated, mask_tokens], dim=1) # full predicted image with cls token on index 0
         
         for block in self.pred_blocks:
-            x = block(x)
+            x = block(x, pad)
         
         x = self.predictor_norm(x)
         
@@ -134,3 +133,39 @@ class ViTPredictor(nn.Module):
         
         return predicted_tokens
 
+class CellTypePredictor(nn.Module):
+
+    def __init__(self, num_classes=8, embed_dim=256, hidden_dim=128, dropout=0.15):
+        super().__init__()
+
+        self.pred_layer = nn.Sequential(
+            nn.Linear(embed_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Linear(hidden_dim, num_classes)
+        )
+
+    def forward(self, x: torch.Tensor, target_patch_indices: list[list[torch.Tensor]], gt_patch_classes: torch.Tensor, loss_fn):
+        """
+        :x student input tensor after ViT, shape: [B, N, D] where -> N cant be the same for every image in the batch -> needs fixing
+        """
+
+        total_losses = []
+        total_guesses = 0
+        total_correct_pred = 0
+
+        for b_idx, batch in enumerate(target_patch_indices):
+            for p_idx in batch:
+                gt_class = gt_patch_classes[p_idx.item()].item()
+                pred_classes = self.pred_layer(x[b_idx])
+                pred_single_class = torch.argmax(pred_classes)
+                if pred_single_class == gt_class: total_correct_pred += 1
+                total_guesses += 1
+                loss = loss_fn(pred_classes, gt_class)
+                total_losses.append(loss)
+
+        avg_loss = sum(total_losses) / len(total_losses)
+        # wont work, bc there are differenct amount of target patches in each image
+        avg_accuracy = (total_correct_pred / total_guesses) * 100
+
+        return avg_loss, avg_accuracy

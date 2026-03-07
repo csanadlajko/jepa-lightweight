@@ -68,7 +68,8 @@ class PatchProcesser(object):
                     image_patch_metadata.append(class_sum)
             batch_patch_metadata.append(image_patch_metadata)
 
-        # a list containing the class information for every patch in every image in the batch
+        # a tensor containing the class information for every patch in every image in the batch
+        # shape [B, N] where N is the corresponding class to every patch
         batch_md_tensor = torch.tensor(batch_patch_metadata, device=x.device, dtype=torch.long)
         assert batch_md_tensor.shape[0] == B
         return batch_md_tensor

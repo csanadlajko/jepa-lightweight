@@ -1,6 +1,9 @@
 from src.parser.parser import parse_jepa_args
 from src.models.vit import VisionTransformer
-from src.models.predictor import ViTPredictor
+from src.models.predictor import (
+    ViTPredictor,
+    CellTypePredictor
+)
 from src.train.train_ijepa import (
     train, # main JEPA training loop for creating the representational space
     train_cls, # CLS token supervised training loop
@@ -82,6 +85,8 @@ if __name__ == "__main__":
         num_classes=args.num_classes
     ).to(device)
 
+    cell_predictor = CellTypePredictor(embed_dim=args.embed_dim).to(device)
+
     teacher_model.apply(init_weights)
     student_model.apply(init_weights)
     predictor.apply(init_weights)
@@ -126,7 +131,6 @@ if __name__ == "__main__":
         else:
             ## train JEPA on PDL1 dataset with local representation classification
             print("setting up pdl1 training...")
-            text_encoder.eval()
             loss_epoch = train_pdl1(
                 teacher_mod=teacher_model, 
                 student_mod=student_model, 
@@ -136,7 +140,6 @@ if __name__ == "__main__":
                 predictor=predictor,
                 momentum=args.momentum,
                 ijepa_loss=model_config["ijepa_loss"],
-                multimodal=args.multimodal_run,
                 cell_percentage=args.cell_percentage,
                 device=device,
                 cell_mask=cell_mask
