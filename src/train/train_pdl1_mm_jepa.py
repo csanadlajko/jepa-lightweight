@@ -79,8 +79,7 @@ def train_pdl1(
 
 def train_cell_predictor(
         student_mod, 
-        loader, 
-        optim_student,
+        loader,
         optim_predictor,
         cell_predictor,
         device,
@@ -89,7 +88,7 @@ def train_cell_predictor(
         loss_fn,
         cell_percentage=20
     ):
-    student_mod.train()
+    student_mod.eval()
     cell_predictor.train()
 
     total_loss = 0.0
@@ -118,13 +117,11 @@ def train_cell_predictor(
             loss_fn
         )
 
-        optim_student.zero_grad()
         optim_predictor.zero_grad()
 
         loss_all.backward()
 
         optim_predictor.step()
-        optim_student.step()
 
         total_loss += loss_all.item()
         num_batches += 1

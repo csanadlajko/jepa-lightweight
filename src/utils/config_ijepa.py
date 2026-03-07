@@ -32,7 +32,8 @@ def get_model_config(student_model, predictor, learning_rate, epochs):
         "optim_predictor": optim_predictor,
         "ijepa_loss": nn.MSELoss(),
         "cls_loss": nn.CrossEntropyLoss(),
-        "student_scheduler": student_scheduler
+        "student_scheduler": student_scheduler,
+        "cell_predictor_loss": nn.Softmax()
     }
 
 def init_weights(model):
