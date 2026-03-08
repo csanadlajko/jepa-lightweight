@@ -27,7 +27,9 @@ class PatchProcesser(object):
         jepa_classes = []
         px1, py1, px2, py2 = top_left_patch[0], top_left_patch[1], bottom_right_patch[0], bottom_right_patch[1]
         for i, bbox in enumerate(image_bboxes):
-            bx1, by1, bx2, by2 = bbox[0], bbox[1], bbox[2], bbox[3]
+            bx1, by1, bw, bh = bbox[0], bbox[1], bbox[2], bbox[3]
+            bx2 = bw + bx1
+            by2 = bh + by1
             # left-bottom-right-top coordinate inspection for intersection
             if (bx2 > px1) and (by1 < py2) and (bx1 < px2) and (by2 > py1):
                 # if all the requirements are met above, the bbbox falls inside the current patch
