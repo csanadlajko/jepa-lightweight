@@ -178,6 +178,7 @@ if __name__ == "__main__":
                 student_mod=student_model,
                 loader=train_loader,
                 optim_predictor=model_config["optim_cls"],
+                predictor=predictor,
                 cell_predictor=cell_predictor,
                 device=device,
                 cell_mask=cell_mask,
@@ -208,6 +209,8 @@ if __name__ == "__main__":
     else:
         cls_acc = eval_cell_predictor(
             student_model=student_model,
+            cell_predictor=cell_predictor,
+            predictor=predictor,
             test_loader=test_loader,
             device=device,
             cell_mask=cell_mask,

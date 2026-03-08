@@ -310,7 +310,7 @@ def apply_mask(x: torch.Tensor, mask_indices: list[torch.Tensor], predictor=Fals
                 else:
                     patch_idx = all_idx ## dont shift when using predictor -> not predicting cls token
                 ## concat cls when working with context blocks otherwise only shift indices to right
-                indices = torch.cat([torch.tensor([0], device=x.device), patch_idx]) if conc==True else patch_idx
+                indices = torch.cat([torch.tensor([0]), patch_idx]).to(x.device) if conc==True else patch_idx.to(x.device)
                 masked_tokens = x[i].index_select(dim=0, index=indices)
                 all_masked_tokens.append(masked_tokens.unsqueeze(0))
         ## ??? empty batches are possible ????
@@ -326,9 +326,11 @@ def apply_mask(x: torch.Tensor, mask_indices: list[torch.Tensor], predictor=Fals
                 for t in all_masked_tokens
             ]
 
+            batch_masked = torch.cat(all_masked_tokens, dim=0) 
             # create att. mask -> true if true index is given, false if false index is given
             # compulsory for MHSA
-            attention_mask = (all_masked_tokens[:, :, 0] == -100)
-            return torch.cat(all_masked_tokens, dim=0), attention_mask
+            attention_mask = (batch_masked[:, :, 0] == -100)
+
+            return batch_masked, attention_mask
     else:
         return x.index_select(1, mask_indices), None

@@ -40,6 +40,7 @@ class PatchProcesser(object):
         # return ground truth class integer (only one)
         if len(jepa_classes) != 0:
             jepa_classlist_string = "_".join(jepa_classes)
+            # weirdly small amount of gt classes ??
             return self.PATCH_DATA_MAP[jepa_classlist_string]
         return self.PATCH_DATA_MAP["ni"]
     

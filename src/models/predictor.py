@@ -70,15 +70,15 @@ class ViTPredictor(nn.Module):
         self.tokenizer = tokenizer
         self.text_encoder = text_encoder
 
-    def forward(self, x, context_mask, target_mask, labels: torch.Tensor, multimodal: bool, return_cls_only = False, cell_mask=False):
+    def forward(self, x, context_mask, target_mask, labels: torch.Tensor, multimodal: bool, return_cls_only = False, cell_mask=False, ctx_attn_mask=None):
         ## x includes cls token on index 0
 
         B = x.size(0)
         
         x = self.predictor_embed(x)
         
-        target_positions, pad = apply_mask(self.pred_pos_embed.repeat(B, 1, 1), target_mask, predictor=True, use_padding=cell_mask)
-
+        # get target positions with padding [B, N, D] where N is padded
+        target_positions, pred_target_attn = apply_mask(self.pred_pos_embed.repeat(B, 1, 1), target_mask, predictor=True, use_padding=cell_mask)
         num_target_tokens = target_positions.size(1)
         mask_tokens = self.mask_token.repeat(target_positions.size(0), num_target_tokens, 1)
         mask_tokens = mask_tokens + target_positions
@@ -86,9 +86,15 @@ class ViTPredictor(nn.Module):
         context_tokens_repeated = x.repeat(target_positions.size(0) // x.size(0), 1, 1)
         
         x = torch.cat([context_tokens_repeated, mask_tokens], dim=1) # full predicted image with cls token on index 0
-        
+
+        if cell_mask is True and ctx_attn_mask is not None:
+            cc_attn = torch.cat([ctx_attn_mask, pred_target_attn], dim=1)
+        else: cc_attn = None
+
+        assert cc_attn.shape[1] == x.shape[1]
+
         for block in self.pred_blocks:
-            x = block(x, pad)
+            x = block(x, cc_attn)
         
         x = self.predictor_norm(x)
         
@@ -151,21 +157,28 @@ class CellTypePredictor(nn.Module):
         """
 
         total_losses = []
-        total_guesses = 0
-        total_correct_pred = 0
+        total_samples = 0
+        total_correct = 0
 
+        # for every image in the batch
         for b_idx, batch in enumerate(target_patch_indices):
+            # for every target patch index in an image
             for p_idx in batch:
-                gt_class = gt_patch_classes[p_idx.item()].item()
-                pred_classes = self.pred_layer(x[b_idx])
-                pred_single_class = torch.argmax(pred_classes)
-                if pred_single_class == gt_class: total_correct_pred += 1
-                total_guesses += 1
+                p_idx = p_idx.to(x.device)
+                gt_class = gt_patch_classes[b_idx].index_select(dim=0, index=p_idx)
+                # only select the non padded indices from tensor x
+                pred_classes = self.pred_layer(x[b_idx, :p_idx.shape[0], :])
                 loss = loss_fn(pred_classes, gt_class)
+                pred_labels = torch.argmax(pred_classes, dim=1)
+
+                correct = (pred_labels == gt_class).sum().item()
+
+                total_correct += correct
+                total_samples += gt_class.numel()
                 total_losses.append(loss)
 
         avg_loss = sum(total_losses) / len(total_losses)
         # wont work, bc there are differenct amount of target patches in each image
-        avg_accuracy = (total_correct_pred / total_guesses) * 100
+        avg_accuracy = (total_correct / total_samples) * 100
 
         return avg_loss, avg_accuracy

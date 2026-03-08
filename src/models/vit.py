@@ -87,16 +87,16 @@ class VisionTransformer(nn.Module):
         
     def forward(self, x: torch.Tensor, masks=None, return_cls_only=False, cell_mask=False, cls=True):
         x = self.patch_embed(x, cls) # patch embed and pos encoding
-        pad = None
+        attn_mask = None
         if masks is not None and not return_cls_only and not cell_mask:
-            x, pad = apply_mask(x, masks) # only needed when entering with student model
+            x, attn_mask = apply_mask(x, masks) # only needed when entering with student model
         elif masks is not None and cell_mask == True:
             ## used when pdl1 cell context mask is given
-            x, pad = apply_mask(x, masks, predictor=True, use_padding=True)
+            x, attn_mask = apply_mask(x, masks, predictor=True, use_padding=True)
 
         for block in self.encoder:
-            x = block(x, pad)
+            x = block(x, attn_mask)
 
         x = self.norm(x)
         
-        return x
+        return x, attn_mask
