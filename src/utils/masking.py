@@ -4,6 +4,7 @@ import torch
 from src.parser.parser import parse_jepa_args
 from typing import Any
 import random
+import torch.nn.functional as F
 
 args = parse_jepa_args()
 
@@ -291,7 +292,7 @@ class Mask(object):
             
         return collated_batch, masked_ctx_batch, masked_target_batch
     
-def apply_mask(x: torch.Tensor, mask_indices: list[torch.Tensor], predictor=False):
+def apply_mask(x: torch.Tensor, mask_indices: list[torch.Tensor], predictor=False, use_padding=False):
     if isinstance(mask_indices, list):
         all_masked_tokens = []
         for i, mask_idx in enumerate(mask_indices):
@@ -305,14 +306,31 @@ def apply_mask(x: torch.Tensor, mask_indices: list[torch.Tensor], predictor=Fals
                 conc=True # concat when selecting context blocks for vit and vit predictor
             if all_idx.numel() > 0:
                 if not predictor:
-                    patch_idx = all_idx+1 ## shift indices to right because cls
+                    patch_idx = (all_idx+1).to(x.device) ## shift indices to right because cls
                 else:
-                    patch_idx = all_idx ## dont shift when using predictor -> not predicting cls token
+                    patch_idx = all_idx.to(x.device) ## dont shift when using predictor -> not predicting cls token
                 ## concat cls when working with context blocks otherwise only shift indices to right
                 indices = torch.cat([torch.tensor([0], device=x.device), patch_idx]) if conc==True else patch_idx
                 masked_tokens = x[i].index_select(dim=0, index=indices)
                 all_masked_tokens.append(masked_tokens.unsqueeze(0))
         ## ??? empty batches are possible ????
-        return torch.cat(all_masked_tokens, dim=0)
+        if use_padding is False:
+            return torch.cat(all_masked_tokens, dim=0), None
+        else:
+            # get maximum padding
+            N_max = max(t.shape[1] for t in all_masked_tokens)
+
+            # pad all embeddings to the longest patch length (D_left, D_right, N_left, N_right)
+            all_masked_tokens = [
+                F.pad(input=t, pad=(0, 0, 0, N_max - t.shape[1]), value=-100)
+                for t in all_masked_tokens
+            ]
+
+            batch_masked = torch.cat(all_masked_tokens, dim=0) 
+            # create att. mask -> true if true index is given, false if false index is given
+            # compulsory for MHSA
+            attention_mask = (batch_masked[:, :, 0] == -100)
+
+            return batch_masked, attention_mask
     else:
-        return x.index_select(1, mask_indices)
+        return x.index_select(1, mask_indices), None

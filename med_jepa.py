@@ -1,6 +1,9 @@
 from src.parser.parser import parse_jepa_args
 from src.models.vit import VisionTransformer
-from src.models.predictor import ViTPredictor
+from src.models.predictor import (
+    ViTPredictor,
+    CellTypePredictor
+)
 from src.train.train_ijepa import (
     train, # main JEPA training loop for creating the representational space
     train_cls, # CLS token supervised training loop
@@ -9,11 +12,14 @@ from src.train.train_ijepa import (
     eval_cls # cls evalutaion on the test dataset
 )
 from src.train.train_pdl1_mm_jepa import (
-    train_pdl1 ## train JEPA model on PDL1 cell dataset
+    train_pdl1, # train JEPA model on PDL1 cell dataset
+    train_cell_predictor, # finetune cell predictor FFN
+    eval_cell_predictor # evaluate finetuned JEPA model
 )
 from src.data_preprocess.dataloader import load_dataset
 from src.utils.config_ijepa import get_model_config, init_weights
 from src.utils.masking import Mask, CellMask
+from src.utils.patch_metadata import PatchProcesser
 from transformers import AutoTokenizer, AutoModelForCausalLM
 import torch
 import datetime
@@ -82,6 +88,11 @@ if __name__ == "__main__":
         num_classes=args.num_classes
     ).to(device)
 
+    cell_predictor = CellTypePredictor(embed_dim=args.embed_dim).to(device)
+    patch_processor = PatchProcesser(
+        patch_size=args.patch_size
+    )
+
     teacher_model.apply(init_weights)
     student_model.apply(init_weights)
     predictor.apply(init_weights)
@@ -126,7 +137,6 @@ if __name__ == "__main__":
         else:
             ## train JEPA on PDL1 dataset with local representation classification
             print("setting up pdl1 training...")
-            text_encoder.eval()
             loss_epoch = train_pdl1(
                 teacher_mod=teacher_model, 
                 student_mod=student_model, 
@@ -136,7 +146,6 @@ if __name__ == "__main__":
                 predictor=predictor,
                 momentum=args.momentum,
                 ijepa_loss=model_config["ijepa_loss"],
-                multimodal=args.multimodal_run,
                 cell_percentage=args.cell_percentage,
                 device=device,
                 cell_mask=cell_mask
@@ -152,17 +161,31 @@ if __name__ == "__main__":
 
 
     for epoch in range(args.epochs):
-        print(f"\n=== CLS EPOCH {epoch+1}/{args.epochs} ===")
-        cls_loss_at_epoch, accuracy_epoch = train_cls(
-            student_model=student_model, 
-            train_dataset=train_loader, 
-            predictor=predictor,
-            optim_cls=model_config["optim_cls"],
-            cls_loss=model_config["cls_loss"],
-            device=device,
-            mask=mask,
-            multimodal=False ## false in every case to prevent leakage !!
-        )
+        print(f"\n=== Classification finetuning EPOCH {epoch+1}/{args.epochs} ===")
+        if args.dataset != "pdl1":
+            cls_loss_at_epoch, accuracy_epoch = train_cls(
+                student_model=student_model, 
+                train_dataset=train_loader, 
+                predictor=predictor,
+                optim_cls=model_config["optim_cls"],
+                cls_loss=model_config["cls_loss"],
+                device=device,
+                mask=mask,
+                multimodal=False ## false in every case to prevent leakage !!
+            )
+        else:
+            cls_loss_at_epoch, accuracy_epoch = train_cell_predictor(
+                student_mod=student_model,
+                loader=train_loader,
+                optim_predictor=model_config["optim_cls"],
+                predictor=predictor,
+                cell_predictor=cell_predictor,
+                device=device,
+                cell_mask=cell_mask,
+                patch_processer=patch_processor,
+                loss_fn=model_config["cell_predictor_loss"],
+                cell_percentage=args.cell_percentage
+            )
         accuracy_per_epoch.append(accuracy_epoch)
         cls_loss_per_epoch.append(cls_loss_at_epoch)
     
@@ -173,14 +196,28 @@ if __name__ == "__main__":
 
     print("\n=== FINAL EVALUATION ===")
     
-    cls_acc = eval_cls(
-        model=student_model, 
-        test_dataset=test_loader, 
-        predictor=predictor,
-        device=device,
-        mask=mask,
-        multimodal=False ## false in every case to prevent leakage !!
-    )
+
+    if args.dataset != "dpl1":
+        cls_acc = eval_cls(
+            model=student_model, 
+            test_dataset=test_loader, 
+            predictor=predictor,
+            device=device,
+            mask=mask,
+            multimodal=False ## false in every case to prevent leakage !!
+        )
+    else:
+        cls_acc = eval_cell_predictor(
+            student_model=student_model,
+            cell_predictor=cell_predictor,
+            predictor=predictor,
+            test_loader=test_loader,
+            device=device,
+            cell_mask=cell_mask,
+            patch_processer=patch_processor,
+            loss_fn=model_config["cell_predictor_loss"],
+            cell_percentage=args.cell_percentage
+        )
 
     show_loss_per_epoch(jepa_loss_per_epoch, cls_loss_per_epoch, run_identifier, result_folder)
     show_cls_data_per_epoch(accuracy_per_epoch, run_identifier, result_folder)

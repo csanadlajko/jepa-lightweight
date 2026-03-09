@@ -53,8 +53,13 @@ class TransformerEncoder(nn.Module):
         self.mlp = MLP(in_features=embed_dim, hidden_features=mlp_dim, out_features=embed_dim, act_layer=nn.GELU, drop=drop)
         self.dropout = nn.Dropout(drop)
 
-    def forward(self, x):
-        attn_output, _ = self.att(self.norm1(x), self.norm1(x), self.norm1(x))
+    def forward(self, x, pad):
+        attn_output, _ = self.att(
+            query=self.norm1(x),
+            key=self.norm1(x),
+            value=self.norm1(x),
+            key_padding_mask=pad
+        )
         x = x + self.dropout(attn_output)
         x = x + self.dropout(self.mlp(self.norm2(x)))
         return x
@@ -82,15 +87,16 @@ class VisionTransformer(nn.Module):
         
     def forward(self, x: torch.Tensor, masks=None, return_cls_only=False, cell_mask=False, cls=True):
         x = self.patch_embed(x, cls) # patch embed and pos encoding
+        attn_mask = None
         if masks is not None and not return_cls_only and not cell_mask:
-            x = apply_mask(x, masks) # only needed when entering with student model
+            x, attn_mask = apply_mask(x, masks) # only needed when entering with student model
         elif masks is not None and cell_mask == True:
             ## used when pdl1 cell context mask is given
-            x = apply_mask(x, masks, predictor=True)
+            x, attn_mask = apply_mask(x, masks, predictor=True, use_padding=True)
 
         for block in self.encoder:
-            x = block(x)
+            x = block(x, attn_mask)
 
         x = self.norm(x)
         
-        return x
+        return x, attn_mask
