@@ -141,7 +141,7 @@ class ViTPredictor(nn.Module):
 
 class CellTypePredictor(nn.Module):
 
-    def __init__(self, num_classes=8, embed_dim=256, hidden_dim=128, dropout=0.15):
+    def __init__(self, num_classes=8, embed_dim=256, hidden_dim=128, dropout=0.1):
         super().__init__()
 
         self.pred_layer = nn.Sequential(

@@ -152,6 +152,7 @@ def train_cell_predictor(
     avg_acc = running_acc / num_batches
     print(f"=== running accuracy this cell prediction epoch: {avg_acc:.2f}% ===")
     print(f"=== avg loss this cell prediction epoch: {avg_loss:.4f} ===")
+    return avg_loss, avg_acc
 
 def eval_cell_predictor(
         student_model,
@@ -168,6 +169,7 @@ def eval_cell_predictor(
     cell_predictor.eval()
 
     batch_num = 1
+    total_acc = 0
 
     for (images, annotation) in test_loader:
         images = images.to(device)
@@ -199,10 +201,10 @@ def eval_cell_predictor(
                 patch_meta,
                 loss_fn
             )
-        
+        total_acc += accuracy
         batch_num += 1
 
         print(f"=== Running eval accuracy: {accuracy:.2f}% ===")
         print(f"=== Running eval loss: {(sum(loss_all) / len(loss_all)):.4f} ===")
 
-    return accuracy / batch_num
+    return total_acc / batch_num
