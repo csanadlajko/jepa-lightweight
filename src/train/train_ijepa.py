@@ -38,11 +38,11 @@ def train(teacher_mod,
         context_masks, target_masks = mask(images) # only indices -> exclude cls
         
         with torch.no_grad():
-            teacher_tokens = teacher_mod(images)
+            teacher_tokens, _ = teacher_mod(images)
             teacher_tokens = F.layer_norm(teacher_tokens, (teacher_tokens.size(-1),))
             teacher_target_tokens, _ = apply_mask(teacher_tokens, target_masks)
 
-        student_tokens = student_mod(images, masks=context_masks)
+        student_tokens, _ = student_mod(images, masks=context_masks)
 
         # if debug == "y":
         #     make_dot(student_tokens, params=dict(student_mod.named_parameters())).render(filename="model_vis", directory="results", format="png")
@@ -54,7 +54,6 @@ def train(teacher_mod,
         
         loss_curr = ijepa_loss(predicted_target_tokens, teacher_target_tokens)
             
-        print(loss_curr.item())
         loss_curr.backward()
         
         optim_student.step()
@@ -105,7 +104,7 @@ def train_cls(student_model,
         ctx_mask, trgt_masks = mask(images)
         
         # student mask embeddings from trained model
-        student_enc = student_model(images, masks=ctx_mask)
+        student_enc, _ = student_model(images, masks=ctx_mask)
 
         # cls tokens for the predicted full image -> not training cls from context embeddings
         pred_classes = predictor(student_enc, ctx_mask, trgt_masks, labels, multimodal, return_cls_only=True)
@@ -156,7 +155,7 @@ def eval_cls(model,
 
             ctx_masks, target_masks = mask(images)
             
-            student_embeddings = model(images, masks=ctx_masks)
+            student_embeddings, _ = model(images, masks=ctx_masks)
 
             pred_classes = predictor(student_embeddings, ctx_masks, target_masks, labels, multimodal, return_cls_only=True)
 

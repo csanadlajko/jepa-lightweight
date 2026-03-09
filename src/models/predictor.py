@@ -89,9 +89,8 @@ class ViTPredictor(nn.Module):
 
         if cell_mask is True and ctx_attn_mask is not None:
             cc_attn = torch.cat([ctx_attn_mask, pred_target_attn], dim=1)
+            assert cc_attn.shape[1] == x.shape[1]
         else: cc_attn = None
-
-        assert cc_attn.shape[1] == x.shape[1]
 
         for block in self.pred_blocks:
             x = block(x, cc_attn)

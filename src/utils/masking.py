@@ -306,11 +306,11 @@ def apply_mask(x: torch.Tensor, mask_indices: list[torch.Tensor], predictor=Fals
                 conc=True # concat when selecting context blocks for vit and vit predictor
             if all_idx.numel() > 0:
                 if not predictor:
-                    patch_idx = all_idx+1 ## shift indices to right because cls
+                    patch_idx = (all_idx+1).to(x.device) ## shift indices to right because cls
                 else:
-                    patch_idx = all_idx ## dont shift when using predictor -> not predicting cls token
+                    patch_idx = all_idx.to(x.device) ## dont shift when using predictor -> not predicting cls token
                 ## concat cls when working with context blocks otherwise only shift indices to right
-                indices = torch.cat([torch.tensor([0]), patch_idx]).to(x.device) if conc==True else patch_idx.to(x.device)
+                indices = torch.cat([torch.tensor([0], device=x.device), patch_idx]) if conc==True else patch_idx
                 masked_tokens = x[i].index_select(dim=0, index=indices)
                 all_masked_tokens.append(masked_tokens.unsqueeze(0))
         ## ??? empty batches are possible ????
