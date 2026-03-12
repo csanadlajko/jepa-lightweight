@@ -10,3 +10,7 @@ Current focus of the project is: Cell classification based on microenvironmental
 In previous experiments, the multimodal JEPA model outperformed the standard LeNet CNN on a image classification task on the CIFAR-10 dataset (see `/results/jepa_vs_lenet`) using a CLS token for global representation. 
 
 Based on these results, the current research direction is to investigate the local representation learning capabilities of the JEPA architecture.
+
+Patch finetuning and classification architecture:
+
+![image](src/model_visualize/patch_classifier.png)
