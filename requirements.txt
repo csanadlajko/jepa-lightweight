@@ -4,3 +4,4 @@ torchvision
 numpy
 transformers
 matplotlib
+opencv-python

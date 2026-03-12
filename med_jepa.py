@@ -101,7 +101,9 @@ if __name__ == "__main__":
         student_model,
         predictor,
         args.lr,
-        args.epochs
+        args.epochs,
+        cell_predictor,
+        args.finetune_lr
     )
 
     student_scheduler = model_config["student_scheduler"]
@@ -177,7 +179,7 @@ if __name__ == "__main__":
             cls_loss_at_epoch, accuracy_epoch = train_cell_predictor(
                 student_mod=student_model,
                 loader=train_loader,
-                optim_predictor=model_config["optim_cls"],
+                optim_predictor=model_config["optim_cell_predictor"],
                 predictor=predictor,
                 cell_predictor=cell_predictor,
                 device=device,

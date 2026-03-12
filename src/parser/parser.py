@@ -26,6 +26,7 @@ def parse_jepa_args():
     parser.add_argument("--reverse_transform", help="switches the transformation between the train and test dataset (default: n)", default="n", type=str)
     parser.add_argument("--annotation_path", help="path of the annontation file(s) (default: '')", default="", type=str)
     parser.add_argument("--cell_percentage", help="percentage of cells to observe when masking target (defult: 20pct)", default=20, type=int)
+    parser.add_argument("--finetune_lr", help="learning rate of the fine tuning algorithm (defaul 0.005)", default=0.005, type=int)
 
     args = parser.parse_args()
 
