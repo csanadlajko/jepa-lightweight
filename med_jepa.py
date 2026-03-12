@@ -199,7 +199,7 @@ if __name__ == "__main__":
     print("\n=== FINAL EVALUATION ===")
     
 
-    if args.dataset != "dpl1":
+    if args.dataset != "pdl1":
         cls_acc = eval_cls(
             model=student_model, 
             test_dataset=test_loader, 
