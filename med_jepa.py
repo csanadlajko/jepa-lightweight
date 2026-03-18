@@ -20,6 +20,7 @@ from src.data_preprocess.dataloader import load_dataset
 from src.utils.config_ijepa import get_model_config, init_weights
 from src.utils.masking import Mask, CellMask
 from src.utils.patch_metadata import PatchProcesser
+from src.utils.logging import log_message
 from transformers import AutoTokenizer, AutoModelForCausalLM
 import torch
 import datetime
@@ -27,6 +28,8 @@ import torch
 
 args = parse_jepa_args()
 device = "cuda" if torch.cuda.is_available() else "cpu"
+
+log_message(f"Training will take place on device: {device}", "info")
 
 mask = Mask(device=device)
 cell_mask = CellMask(device=device)
@@ -96,6 +99,7 @@ if __name__ == "__main__":
     teacher_model.apply(init_weights)
     student_model.apply(init_weights)
     predictor.apply(init_weights)
+    cell_predictor.apply(init_weights)
 
     model_config = get_model_config(
         student_model,
@@ -107,18 +111,20 @@ if __name__ == "__main__":
     )
 
     student_scheduler = model_config["student_scheduler"]
-    
-    print(f"total number of parameters approx.: {sum(p.numel() for p in student_model.parameters()) + sum(p.numel() for p in teacher_model.parameters()) + sum(p.numel() for p in predictor.parameters())}")
-    print(f"Which from are trainable parameters: {sum(p.numel() for p in student_model.parameters() if p.requires_grad) + sum(p.numel() for p in teacher_model.parameters() if p.requires_grad) + sum(p.numel() for p in predictor.parameters() if p.requires_grad)}")
+
+    log_message(
+        msg=f"total number of parameters approx.: {sum(p.numel() for p in student_model.parameters()) + sum(p.numel() for p in teacher_model.parameters()) + sum(p.numel() for p in predictor.parameters())}",
+        level="info"
+    )
 
     if args.multimodal_run == "y":
-        print(f"\nStarting training in MULTIMODAL mode for {args.epochs} epoch(s)!")
+        log_message(f"Starting training in MULTIMODAL mode for {args.epochs} epoch(s)!", "info")
     else:
-        print(f"\nStarting training normal I-JEPA mode for {args.epochs} epoch(s)!")
+        log_message(f"Starting training normal I-JEPA mode for {args.epochs} epoch(s)!", "info")
     
     for epoch in range(args.epochs):
 
-        print(f"\n=== EPOCH {epoch + 1}/{args.epochs} ===")
+        log_message(f"=== EPOCH {epoch + 1}/{args.epochs} ===", "info")
 
         if args.dataset != "pdl1":
             ## train JEPA on regular classification tasks with cls token
@@ -138,7 +144,6 @@ if __name__ == "__main__":
             )
         else:
             ## train JEPA on PDL1 dataset with local representation classification
-            print("setting up pdl1 training...")
             loss_epoch = train_pdl1(
                 teacher_mod=teacher_model, 
                 student_mod=student_model, 
@@ -163,7 +168,7 @@ if __name__ == "__main__":
 
 
     for epoch in range(args.epochs):
-        print(f"\n=== Classification finetuning EPOCH {epoch+1}/{args.epochs} ===")
+        log_message(f"=== Classification finetuning EPOCH {epoch+1}/{args.epochs} ===", "info")
         if args.dataset != "pdl1":
             cls_loss_at_epoch, accuracy_epoch = train_cls(
                 student_model=student_model, 
@@ -195,9 +200,8 @@ if __name__ == "__main__":
         torch.save(student_model.state_dict(), f"{result_folder}/trained_student_cls_{run_identifier}.pth")
         torch.save(teacher_model.state_dict(), f"{result_folder}/teacher_model_cls_{run_identifier}.pth")
         torch.save(predictor.state_dict(), f"{result_folder}/trained_predictor_cls_{run_identifier}.pth")
-
-    print("\n=== FINAL EVALUATION ===")
-    
+        if args.dataset == "pdl1":
+            torch.save(cell_predictor.state_dict(), f"{result_folder}/trained_cell_pred_{run_identifier}.pth")
 
     if args.dataset != "pdl1":
         cls_acc = eval_cls(

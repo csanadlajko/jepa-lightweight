@@ -80,6 +80,7 @@ class ViTPredictor(nn.Module):
         # get target positions with padding [B, N, D] where N is padded
         target_positions, pred_target_attn = apply_mask(self.pred_pos_embed.repeat(B, 1, 1), target_mask, predictor=True, use_padding=cell_mask)
         num_target_tokens = target_positions.size(1)
+        # in case of padding, the learnable mask tokens are containing the paddings...
         mask_tokens = self.mask_token.repeat(target_positions.size(0), num_target_tokens, 1)
         mask_tokens = mask_tokens + target_positions
         
@@ -152,7 +153,9 @@ class CellTypePredictor(nn.Module):
 
     def forward(self, x: torch.Tensor, target_patch_indices: list[list[torch.Tensor]], gt_patch_classes: torch.Tensor, loss_fn):
         """
-        :x student input tensor after ViT, shape: [B, N, D] where -> N cant be the same for every image in the batch -> needs fixing
+        :x predicted target patch embeddings with shape [B, N, D] where N is the (same) padded number of target patches in the batch
+        :target_patch_indices list of length B containing lists of one index tensor each
+        :gt_patch_classes ground-truth class labels for the target patches, shape [B, N] where N is the maximum number of patches in an image
         """
 
         total_losses = []
@@ -162,22 +165,21 @@ class CellTypePredictor(nn.Module):
         # for every image in the batch
         for b_idx, batch in enumerate(target_patch_indices):
             # for every target patch index in an image
-            for p_idx in batch:
-                p_idx = p_idx.to(x.device)
-                gt_class = gt_patch_classes[b_idx].index_select(dim=0, index=p_idx)
-                # only select the non padded indices from tensor x
-                pred_classes = self.pred_layer(x[b_idx, :p_idx.shape[0], :])
-                loss = loss_fn(pred_classes, gt_class)
-                pred_labels = torch.argmax(pred_classes, dim=1)
+            patch_indices = batch[0].to(x.device)
+            
+            gt_class = gt_patch_classes[b_idx].index_select(dim=0, index=patch_indices)
+            # only select the non padded indices from tensor x
+            pred_classes = self.pred_layer(x[b_idx, :patch_indices.shape[0], :])
+            loss = loss_fn(pred_classes, gt_class)
+            pred_labels = torch.argmax(pred_classes, dim=1)
 
-                correct = (pred_labels == gt_class).sum().item()
+            correct = (pred_labels == gt_class).sum().item()
 
-                total_correct += correct
-                total_samples += gt_class.numel()
-                total_losses.append(loss)
+            total_correct += correct
+            total_samples += gt_class.numel()
+            total_losses.append(loss)
 
         avg_loss = sum(total_losses) / len(total_losses)
-        # wont work, bc there are differenct amount of target patches in each image
         avg_accuracy = (total_correct / total_samples) * 100
 
         return avg_loss, avg_accuracy

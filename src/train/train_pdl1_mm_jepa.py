@@ -97,7 +97,6 @@ def train_cell_predictor(
         loss_fn,
         cell_percentage=20
     ):
-    student_mod.eval()
     cell_predictor.train()
 
     total_loss = 0.0
@@ -117,18 +116,19 @@ def train_cell_predictor(
         context_mask_indices = mask_meta["context_patch_indices"]
         target_patch_labels = mask_meta["target_patch_labels"]
 
-        student_tokens, student_attn_mask = student_mod(images, masks=context_mask_indices, cell_mask=True)
+        with torch.no_grad():
+            student_tokens, student_attn_mask = student_mod(images, masks=context_mask_indices, cell_mask=True)
 
-        predicted_target_tokens = predictor(
-            student_tokens, 
-            context_mask_indices, 
-            target_mask_indices, 
-            target_patch_labels,
-            multimodal=False, 
-            return_cls_only=False,
-            cell_mask=True,
-            ctx_attn_mask=student_attn_mask
-        )
+            predicted_target_tokens = predictor(
+                student_tokens, 
+                context_mask_indices, 
+                target_mask_indices, 
+                target_patch_labels,
+                multimodal=False, 
+                return_cls_only=False,
+                cell_mask=True,
+                ctx_attn_mask=student_attn_mask
+            )
 
         ## average loss of all predicted target values
         loss_all, accuracy = cell_predictor(
@@ -168,7 +168,7 @@ def eval_cell_predictor(
     student_model.eval()
     cell_predictor.eval()
 
-    batch_num = 1
+    batch_num = 0
     total_acc = 0
 
     for (images, annotation) in test_loader:
@@ -201,10 +201,12 @@ def eval_cell_predictor(
                 patch_meta,
                 loss_fn
             )
+
         total_acc += accuracy
         batch_num += 1
 
+        avg_loss = loss_all.item() if hasattr(loss_all, 'item') else loss_all
         print(f"=== Running eval accuracy: {accuracy:.2f}% ===")
-        print(f"=== Running eval loss: {(sum(loss_all) / len(loss_all)):.4f} ===")
+        print(f"=== Running eval loss: {avg_loss:.4f} ===")
 
-    return total_acc / batch_num
+    return total_acc / batch_num if batch_num > 0 else 0.0
