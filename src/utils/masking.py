@@ -120,7 +120,7 @@ class Mask(object):
         ctx_mask_scale=(0.2, 0.8),
         aspect_ratio=(0.75, 1.5),
         min_keep=4,
-        max_tries=200
+        max_tries=20
     ):
         if isinstance(input_size, int):
             input_size = (input_size, input_size)
@@ -213,11 +213,16 @@ class Mask(object):
         target_h, target_w = self._sample_block_size(g, self.targ_mask_scale, self.aspect_ratio)
         
         all_mask_ctx, all_mask_target = [], []
-        
+
+        max_patch = self.width * self.height
+        ctx_size = int(max_patch * 0.8)
+
         for _ in range(B):
             occ = torch.zeros((self.height, self.width), dtype=torch.int32)
             
             target_mask = []
+
+            needed = max_patch-ctx_size
             for _ in range(self.ntarg):
                 idx, occ = self._place_block_without_overlap(target_h, target_w, occ)
                 idx = idx.to(self.device)
@@ -240,7 +245,8 @@ class Mask(object):
                 tries += 1
             
             free_idx = torch.nonzero(free.flatten(), as_tuple=False).view(-1)
-            target_size = ctx_h * ctx_w + 1
+
+            target_size = ctx_h * ctx_w
             
             if cmask is None:
                 if free_idx.numel() == 0:
@@ -249,10 +255,7 @@ class Mask(object):
                     perm = torch.randperm(free_idx.numel())
                     take = min(target_size, free_idx.numel())
                     cmask = free_idx[perm[:take]]
-                    
-            current_size = cmask.numel() if cmask is not None and cmask.dim() > 0 else 0
-            needed = target_size - current_size
-            
+
             while needed > 0 and free_idx.numel() > 0:
                 if cmask is not None and cmask.numel() > 0:
                     free_idx = free_idx[~torch.isin(free_idx, cmask)]
@@ -270,7 +273,7 @@ class Mask(object):
                     cmask = torch.cat([cmask, additional])
                 
                 needed -= take
-                    
+              
             all_mask_target.append(target_mask)
             cmask = cmask.to(self.device)
             all_mask_ctx.append(cmask)
@@ -303,14 +306,20 @@ def apply_mask(x: torch.Tensor, mask_indices: list[torch.Tensor], predictor=Fals
             else:
                 # enter when selecting context blocks
                 all_idx = mask_idx
-                conc=True # concat when selecting context blocks for vit and vit predictor
+                if predictor is False:
+                    conc=True # concat when selecting context blocks for vit and vit predictor
+                else:
+                    conc=False
             if all_idx.numel() > 0:
-                if not predictor:
+                if predictor is False:
                     patch_idx = (all_idx+1).to(x.device) ## shift indices to right because cls
                 else:
                     patch_idx = all_idx.to(x.device) ## dont shift when using predictor -> not predicting cls token
                 ## concat cls when working with context blocks otherwise only shift indices to right
-                indices = torch.cat([torch.tensor([0], device=x.device), patch_idx]) if conc==True else patch_idx
+                if conc==True:
+                    indices = torch.cat([torch.tensor([0], device=x.device), patch_idx])
+                else:
+                    indices = patch_idx
                 masked_tokens = x[i].index_select(dim=0, index=indices)
                 all_masked_tokens.append(masked_tokens.unsqueeze(0))
         ## ??? empty batches are possible ????

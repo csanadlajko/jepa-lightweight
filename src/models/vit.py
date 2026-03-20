@@ -57,8 +57,7 @@ class TransformerEncoder(nn.Module):
         attn_output, _ = self.att(
             query=self.norm1(x),
             key=self.norm1(x),
-            value=self.norm1(x),
-            key_padding_mask=pad
+            value=self.norm1(x)
         )
         x = x + self.dropout(attn_output)
         x = x + self.dropout(self.mlp(self.norm2(x)))
@@ -89,13 +88,13 @@ class VisionTransformer(nn.Module):
         x = self.patch_embed(x, cls) # patch embed and pos encoding
         attn_mask = None
         if masks is not None and not return_cls_only and not cell_mask:
-            x, attn_mask = apply_mask(x, masks) # only needed when entering with student model
+            x, attn_mask = apply_mask(x, masks, predictor=True) # only needed when entering with student model
         elif masks is not None and cell_mask == True:
             ## used when pdl1 cell context mask is given
             x, attn_mask = apply_mask(x, masks, predictor=True, use_padding=True)
 
         for block in self.encoder:
-            x = block(x, attn_mask)
+            x = block(x, None)
 
         x = self.norm(x)
         

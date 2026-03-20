@@ -15,6 +15,7 @@ def train_pdl1(
         ijepa_loss,
         device,
         cell_mask,
+        normal_mask,
         cell_percentage=20
     ):
     
@@ -31,12 +32,14 @@ def train_pdl1(
 
         ## acquire context and target cell masks for current batch (patch indices)
         ## size: len(batch)
-        mask_meta = cell_mask(cell_percentage, annotation)
+        # mask_meta = cell_mask(cell_percentage, annotation)
 
-        target_mask_indices = mask_meta["target_patch_indices"]
-        context_mask_indices = mask_meta["context_patch_indices"]
-        target_patch_labels = mask_meta["target_patch_labels"]
-        context_patch_labels = mask_meta["context_patch_labels"]
+        # target_mask_indices = mask_meta["target_patch_indices"]
+        # context_mask_indices = mask_meta["context_patch_indices"]
+        # target_patch_labels = mask_meta["target_patch_labels"]
+        # context_patch_labels = mask_meta["context_patch_labels"]
+
+        context_masks, target_masks = normal_mask(images)
 
         with torch.no_grad():
             ## create teacher tokens for full image
@@ -44,33 +47,26 @@ def train_pdl1(
             teacher_tokens = F.layer_norm(teacher_tokens, (teacher_tokens.size(-1),))
             # target tokens are padded to the longest target list in the batch!!
             # [B, N] corresponding attention mask is given
-            teacher_target_tokens, teacher_attn_mask = apply_mask(teacher_tokens, target_mask_indices, predictor=True, use_padding=True)
+            teacher_target_tokens, teacher_attn_mask = apply_mask(teacher_tokens, target_masks, predictor=True)
 
         ## create context student tokens
         # student tokens are padded as well to the larges context mask index list
-        student_tokens, student_attn_mask = student_mod(images, masks=context_mask_indices, cls=False, cell_mask=True)
+        student_tokens, student_attn_mask = student_mod(images, masks=context_masks, cls=False)
 
         predicted_target_tokens = predictor(
             student_tokens, 
-            context_mask_indices, 
-            target_mask_indices, 
-            target_patch_labels,
+            context_masks, 
+            target_masks, 
+            None,
             multimodal=False, 
             return_cls_only=False,
-            cell_mask=True,
-            ctx_attn_mask=student_attn_mask
+            cell_mask=False
         )
         
         optim_student.zero_grad()
         optim_predictor.zero_grad()
 
-        valid_mask = (~teacher_attn_mask).unsqueeze(-1)
-
-        loss = (predicted_target_tokens - teacher_target_tokens) ** 2
-        loss = loss * valid_mask
-
-        loss_curr = loss.sum() / valid_mask.sum()
-        # loss_curr = ijepa_loss(predicted_target_tokens, teacher_target_tokens)
+        loss_curr = ijepa_loss(predicted_target_tokens, teacher_target_tokens)
 
         loss_curr.backward()
         
@@ -95,6 +91,7 @@ def train_cell_predictor(
         cell_mask,
         patch_processer,
         loss_fn,
+        normal_mask,
         cell_percentage=20
     ):
     cell_predictor.train()
@@ -109,31 +106,35 @@ def train_cell_predictor(
 
         ## acquire context and target cell masks for current batch (patch indices)
         ## size: len(batch)
-        mask_meta: list[dict[str, Any]] = cell_mask(cell_percentage, annotation)
+        # mask_meta: list[dict[str, Any]] = cell_mask(cell_percentage, annotation)
         patch_meta: torch.Tensor = patch_processer(images, annotation)
 
-        target_mask_indices: list[list[torch.Tensor]] = mask_meta["target_patch_indices"]
-        context_mask_indices = mask_meta["context_patch_indices"]
-        target_patch_labels = mask_meta["target_patch_labels"]
+        # target_mask_indices: list[list[torch.Tensor]] = mask_meta["target_patch_indices"]
+        # context_mask_indices = mask_meta["context_patch_indices"]
+        # target_patch_labels = mask_meta["target_patch_labels"]
+
+        context_masks, target_masks = normal_mask(images)
+
+        print(f"target mask size: {len(target_masks)}, first element size (should be 4: {len(target_masks[0])})")
 
         with torch.no_grad():
-            student_tokens, student_attn_mask = student_mod(images, masks=context_mask_indices, cell_mask=True)
+            student_tokens, student_attn_mask = student_mod(images, masks=context_masks)
 
             predicted_target_tokens = predictor(
                 student_tokens, 
-                context_mask_indices, 
-                target_mask_indices, 
-                target_patch_labels,
+                context_masks, 
+                target_masks, 
+                None,
                 multimodal=False, 
                 return_cls_only=False,
-                cell_mask=True,
-                ctx_attn_mask=student_attn_mask
+                cell_mask=False
             )
 
         ## average loss of all predicted target values
+        # target instance mask is list[list[torch.Tensor]]
         loss_all, accuracy = cell_predictor(
             predicted_target_tokens,
-            target_mask_indices,
+            target_masks,
             patch_meta,
             loss_fn
         )

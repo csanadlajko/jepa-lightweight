@@ -155,10 +155,12 @@ if __name__ == "__main__":
                 ijepa_loss=model_config["ijepa_loss"],
                 cell_percentage=args.cell_percentage,
                 device=device,
-                cell_mask=cell_mask
+                cell_mask=cell_mask,
+                normal_mask=mask
             )
 
-        student_scheduler.step()
+        if (epoch+1) % 10 == 0:
+            student_scheduler.step()
         jepa_loss_per_epoch.append(loss_epoch)
     
     if args.debug == "y":
@@ -181,6 +183,8 @@ if __name__ == "__main__":
                 multimodal=False ## false in every case to prevent leakage !!
             )
         else:
+            # mock batch size to 1 in order to cell predictor to work
+            args.batch_size = 1
             cls_loss_at_epoch, accuracy_epoch = train_cell_predictor(
                 student_mod=student_model,
                 loader=train_loader,
@@ -191,7 +195,8 @@ if __name__ == "__main__":
                 cell_mask=cell_mask,
                 patch_processer=patch_processor,
                 loss_fn=model_config["cell_predictor_loss"],
-                cell_percentage=args.cell_percentage
+                cell_percentage=args.cell_percentage,
+                normal_mask=mask
             )
         accuracy_per_epoch.append(accuracy_epoch)
         cls_loss_per_epoch.append(cls_loss_at_epoch)

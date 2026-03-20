@@ -157,7 +157,7 @@ class CellTypePredictor(nn.Module):
         :target_patch_indices list of length B containing lists of one index tensor each
         :gt_patch_classes ground-truth class labels for the target patches, shape [B, N] where N is the maximum number of patches in an image
         """
-
+        
         total_losses = []
         total_samples = 0
         total_correct = 0
@@ -165,11 +165,11 @@ class CellTypePredictor(nn.Module):
         # for every image in the batch
         for b_idx, batch in enumerate(target_patch_indices):
             # for every target patch index in an image
-            patch_indices = batch[0].to(x.device)
+            patch_indices = torch.cat(batch)
             
             gt_class = gt_patch_classes[b_idx].index_select(dim=0, index=patch_indices)
             # only select the non padded indices from tensor x
-            pred_classes = self.pred_layer(x[b_idx, :patch_indices.shape[0], :])
+            pred_classes = self.pred_layer(x[b_idx, :, :])
             loss = loss_fn(pred_classes, gt_class)
             pred_labels = torch.argmax(pred_classes, dim=1)
 
