@@ -116,7 +116,7 @@ class Mask(object):
         patch_size=args.patch_size,
         nctx=1,
         ntarg=args.num_target,
-        targ_mask_scale=(0.05, 0.1),
+        targ_mask_scale=(0.01, 0.03),
         ctx_mask_scale=(0.2, 0.8),
         aspect_ratio=(0.75, 1.5),
         min_keep=4,
@@ -193,11 +193,9 @@ class Mask(object):
 
                 if idx.numel() == total_target:
                     return idx, occ
-            
             tries += 1
         
         idx = torch.randperm(H*W)[:max(self.min_keep, h*w // 2)]
-        
         return idx, occ
     
     def __call__(self, batch, id_only=True):

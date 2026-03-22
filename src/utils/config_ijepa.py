@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-def get_model_config(student_model, predictor, learning_rate, epochs, cell_predictor, finetune_lr=0.005):
+def get_model_config(student_model, predictor, learning_rate, epochs, block_predictor, finetune_lr=0.005):
 
     optim_student = torch.optim.AdamW(
         student_model.parameters(),
@@ -21,8 +21,8 @@ def get_model_config(student_model, predictor, learning_rate, epochs, cell_predi
         weight_decay=0.05
     )
 
-    optim_cell_predictor = torch.optim.AdamW(
-        cell_predictor.parameters(),
+    optim_block_predictor = torch.optim.AdamW(
+        block_predictor.parameters(),
         lr=finetune_lr,
         weight_decay=0.05
     )
@@ -36,11 +36,11 @@ def get_model_config(student_model, predictor, learning_rate, epochs, cell_predi
         "optim_student": optim_student,
         "optim_cls": optim_cls,
         "optim_predictor": optim_predictor,
-        "optim_cell_predictor": optim_cell_predictor,
+        "optim_block_predictor": optim_block_predictor,
         "ijepa_loss": nn.MSELoss(),
         "cls_loss": nn.CrossEntropyLoss(),
         "student_scheduler": student_scheduler,
-        "cell_predictor_loss": nn.CrossEntropyLoss()
+        "block_predictor_loss": nn.CrossEntropyLoss()
     }
 
 def init_weights(model):

@@ -52,9 +52,7 @@ def get_pdl1_dataset(input_dir: str, annotation_file_path: str, reverse: str = "
         dataset=test_data,
         batch_size=args.batch_size,
         shuffle=False,
-        collate_fn=PDL1Dataset.collate_fn,
-        num_workers=6,
-        pin_memory=True
+        collate_fn=PDL1Dataset.collate_fn
     )
     return train_loader, test_loader
 

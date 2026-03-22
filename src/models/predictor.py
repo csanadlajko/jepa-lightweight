@@ -3,28 +3,33 @@ import torch
 from ..utils.masking import apply_mask
 from ..utils.pos_encoding import sinusoidal_pos_embedding2d
 from .vit import TransformerEncoder
+from ..utils.patch_metadata import get_block_class
 
 class ViTPredictor(nn.Module):
 
     def __init__(
             self, 
             num_patches,
-            device, 
-            embed_dim=256, 
+            device,
+            num_targets,
+            embed_dim=256,
             pred_dim=None, 
             depth=6,
             num_heads=8, 
             drop_rate=0.1,
-            num_classes=10, 
+            num_classes=10,
             tokenizer=None, 
             text_encoder=None
         ):
         super().__init__()
         if pred_dim is None:
             pred_dim = embed_dim
+        self.num_targets = num_targets
 
         self.predictor_embed = nn.Linear(embed_dim, pred_dim, bias=True)
         self.mask_token = nn.Parameter(torch.zeros(1, 1, pred_dim), requires_grad=True) # learnable parameters to predict masked region
+        # CLS token for target blocks
+        self.target_block_cls = nn.Parameter(torch.zeros(1, 1, pred_dim), requires_grad=True)
 
         self.pred_pos_embed = sinusoidal_pos_embedding2d(num_patches, embed_dim, device)
 
@@ -70,7 +75,7 @@ class ViTPredictor(nn.Module):
         self.tokenizer = tokenizer
         self.text_encoder = text_encoder
 
-    def forward(self, x, context_mask, target_mask, labels: torch.Tensor, multimodal: bool, return_cls_only = False, cell_mask=False, ctx_attn_mask=None):
+    def forward(self, x, context_mask, target_mask, labels: torch.Tensor, multimodal: bool, return_cls_only = False, cell_mask=False, block_cls=False):
         ## x includes cls token on index 0
 
         B = x.size(0)
@@ -82,26 +87,44 @@ class ViTPredictor(nn.Module):
         num_target_tokens = target_positions.size(1)
         # in case of padding, the learnable mask tokens are containing the paddings...
         mask_tokens = self.mask_token.repeat(target_positions.size(0), num_target_tokens, 1)
+        block_cls_embeddings = self.target_block_cls.repeat(B, self.num_targets, 1)
         mask_tokens = mask_tokens + target_positions
         
         context_tokens_repeated = x.repeat(target_positions.size(0) // x.size(0), 1, 1)
         
         x = torch.cat([context_tokens_repeated, mask_tokens], dim=1) # full predicted image with cls token on index 0
 
-        if cell_mask is True and ctx_attn_mask is not None:
-            cc_attn = torch.cat([ctx_attn_mask, pred_target_attn], dim=1)
-            assert cc_attn.shape[1] == x.shape[1]
-        else: cc_attn = None
-
+        # run attention on whole image
         for block in self.pred_blocks:
-            x = block(x, cc_attn)
-        
+            x = block(x, None)
+
         x = self.predictor_norm(x)
-        
+
         context_length = context_tokens_repeated.size(1)
 
         predicted_tokens = x[:, context_length:]
+
+        block_cls_tokens_raw = []
+        for block in range(self.num_targets):
+            block_end = int((block + 1) * (predicted_tokens.shape[1] / self.num_targets))
+            block_start = int(((block + 1) * (predicted_tokens.shape[1] / self.num_targets)) - (predicted_tokens.shape[1] / self.num_targets))
+
+            batch_block = predicted_tokens[:, block_start:block_end, :]
+            corresp_cls = block_cls_embeddings[:, block, :]
+            corresp_cls = corresp_cls.unsqueeze(1)
+
+            cls_extended = torch.cat([corresp_cls, batch_block], dim=1)
+
+            for att_block in self.pred_blocks:
+                cls_extended = att_block(cls_extended, None)
+            
+            # append only the block cls token
+            cls_only = cls_extended[:, 0, :].unsqueeze(1)
+            block_cls_tokens_raw.append(cls_only)
         
+        # should be a tensor with a shape [B, self.num_targets, embed_dim]
+        block_cls_tokens_cat = torch.cat(block_cls_tokens_raw, dim=1)
+
         predicted_tokens = self.predictor_proj(predicted_tokens)
 
         # only enter if model is ran in multimodal mode
@@ -137,19 +160,21 @@ class ViTPredictor(nn.Module):
             cls_token = x[:, 0, :] # acquire cls token representing predicted image
             return self.cls_head(cls_token)
         
-        return predicted_tokens
+        return predicted_tokens, block_cls_tokens_cat
 
 class CellTypePredictor(nn.Module):
 
     def __init__(self, num_classes=8, embed_dim=256, hidden_dim=128, dropout=0.1):
         super().__init__()
 
-        self.pred_layer = nn.Sequential(
-            nn.Linear(embed_dim, hidden_dim),
-            nn.ReLU(),
-            nn.Dropout(dropout),
-            nn.Linear(hidden_dim, num_classes)
-        )
+        self.pred_layer = nn.Linear(embed_dim, num_classes)
+
+        # self.pred_layer = nn.Sequential(
+        #     nn.Linear(embed_dim, hidden_dim),
+        #     nn.ReLU(),
+        #     nn.Dropout(dropout),
+        #     nn.Linear(hidden_dim, num_classes)
+        # )
 
     def forward(self, x: torch.Tensor, target_patch_indices: list[list[torch.Tensor]], gt_patch_classes: torch.Tensor, loss_fn):
         """
@@ -182,4 +207,60 @@ class CellTypePredictor(nn.Module):
         avg_loss = sum(total_losses) / len(total_losses)
         avg_accuracy = (total_correct / total_samples) * 100
 
+        return avg_loss, avg_accuracy
+
+
+class BlockTypePredictor(nn.Module):
+
+    def __init__(self, num_classes=15, embed_dim=256, hidden_dim=128, dropout=0.1):
+        super().__init__()
+
+        self.prediction_head = nn.Linear(embed_dim, num_classes)
+
+        # self.prediction_head = nn.Sequential(
+        #     nn.Linear(embed_dim, hidden_dim),
+        #     nn.ReLU(),
+        #     nn.Dropout(dropout),
+        #     nn.Linear(hidden_dim, num_classes)
+        # )
+
+    def forward(self, x: torch.Tensor, target_patch_indices: list[list[torch.Tensor]], gt_patch_classes: torch.Tensor, loss_fn):
+        # x shape is [B, N, D]
+        # where N is the CLS token for every block in the image
+
+        total_loss = []
+        total_samples = 0
+        total_correct = 0
+
+        # first iteration for every tensor in the batch
+        for b_idx, target_blocks in enumerate(target_patch_indices):
+
+            block_classes = []
+
+            # second iteration for every target block in the corresponding tensor
+            for block_indices in target_blocks:
+                block_gt_class: torch.Tensor = get_block_class(gt_patch_classes, block_indices, b_idx)
+                block_classes.append(block_gt_class)
+
+            # get shape [num_target] tensor
+            block_classes_tens = torch.tensor(block_classes, device=x.device)
+
+            # get shape [num_target, embed_dim] tensor
+            batch_cls_tokens = x[b_idx, :, :]
+
+            # get shape [num_target, num_classes] tensor
+            predicted_block_class = self.prediction_head(batch_cls_tokens)
+
+            loss = loss_fn(predicted_block_class, block_classes_tens)
+            total_loss.append(loss)
+
+            pred_labels = torch.argmax(predicted_block_class, dim=1)
+
+            correct = (pred_labels == block_classes_tens).sum().item()
+
+            total_correct += correct
+            total_samples += block_classes_tens.numel()
+        
+        avg_loss = sum(total_loss) / len(total_loss)
+        avg_accuracy = (total_correct / total_samples) * 100
         return avg_loss, avg_accuracy

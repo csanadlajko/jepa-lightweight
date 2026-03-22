@@ -53,7 +53,7 @@ def train_pdl1(
         # student tokens are padded as well to the larges context mask index list
         student_tokens, student_attn_mask = student_mod(images, masks=context_masks, cls=False)
 
-        predicted_target_tokens = predictor(
+        predicted_target_tokens, _ = predictor(
             student_tokens, 
             context_masks, 
             target_masks, 
@@ -62,7 +62,7 @@ def train_pdl1(
             return_cls_only=False,
             cell_mask=False
         )
-        
+
         optim_student.zero_grad()
         optim_predictor.zero_grad()
 
@@ -84,7 +84,7 @@ def train_pdl1(
 def train_cell_predictor(
         student_mod, 
         loader,
-        optim_predictor,
+        optim_block_predictor,
         predictor,
         cell_predictor,
         device,
@@ -92,9 +92,12 @@ def train_cell_predictor(
         patch_processer,
         loss_fn,
         normal_mask,
+        block_predictor,
         cell_percentage=20
     ):
-    cell_predictor.train()
+    block_predictor.train()
+    student_mod.eval()
+    predictor.eval()
 
     total_loss = 0.0
     num_batches = 0
@@ -115,12 +118,10 @@ def train_cell_predictor(
 
         context_masks, target_masks = normal_mask(images)
 
-        print(f"target mask size: {len(target_masks)}, first element size (should be 4: {len(target_masks[0])})")
-
         with torch.no_grad():
-            student_tokens, student_attn_mask = student_mod(images, masks=context_masks)
+            student_tokens, _ = student_mod(images, masks=context_masks)
 
-            predicted_target_tokens = predictor(
+            _, block_cls_tokens = predictor(
                 student_tokens, 
                 context_masks, 
                 target_masks, 
@@ -132,18 +133,26 @@ def train_cell_predictor(
 
         ## average loss of all predicted target values
         # target instance mask is list[list[torch.Tensor]]
-        loss_all, accuracy = cell_predictor(
-            predicted_target_tokens,
+
+        loss_all, accuracy = block_predictor(
+            block_cls_tokens,
             target_masks,
             patch_meta,
             loss_fn
         )
 
-        optim_predictor.zero_grad()
+        # loss_all, accuracy = cell_predictor(
+        #     predicted_target_tokens,
+        #     target_masks,
+        #     patch_meta,
+        #     loss_fn
+        # )
+
+        optim_block_predictor.zero_grad()
 
         loss_all.backward()
 
-        optim_predictor.step()
+        optim_block_predictor.step()
 
         total_loss += loss_all.item()
         num_batches += 1
@@ -153,7 +162,7 @@ def train_cell_predictor(
     avg_acc = running_acc / num_batches
     print(f"=== running accuracy this cell prediction epoch: {avg_acc:.2f}% ===")
     print(f"=== avg loss this cell prediction epoch: {avg_loss:.4f} ===")
-    return avg_loss, avg_acc
+    return avg_loss, 0
 
 def eval_cell_predictor(
         student_model,

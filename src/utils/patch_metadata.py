@@ -6,8 +6,62 @@ from typing import Any
 ## npdl1: pdl1 negative tumor cell
 ## ppdl1: pdl1 positive tumor cell
 
+BLOCK_DATA_MAP: dict[str, int] = {
+    "0": 0, # only no class in the block
+    
+    "1": 1, # only non tumor in the block
+    "2": 2, # only pdl1 negative in the block
+    "3": 3, # only positive pdl1 in the block
+
+    "1_2": 4, # only non tumor and neg pdl1 in the block
+    "1_3": 5, # only non tumor and pos pdl1 in the block
+    "2_3": 6, # only pdl1 neg and pdl1 pos in the block
+    "1_2_3": 7, # only non tumor, neg pdl1 and pos pdl1 in the block
+
+    "0_1": 8, # only no class and non tumor in the block
+    "0_2": 9, # only no class and pdl1 neg in the block
+    "0_3": 10, # only no class and pdl1 pos in the block
+
+    "0_1_2": 11, # only no class, no tumor and pdl1 neg
+    "0_1_3": 12, # only no class, no tumor, pdl1 pos
+    "0_2_3": 13, # only no class, pdl1 neg and pdl1 pos
+
+    "0_1_2_3": 14 # every possible combination in the block
+}
+
+BLOCK_LABEL_MAP: dict[str, str] = {
+    "0": "There are no identified cells in this block",
+    
+    "1": "This block only contains non-tumor cells", # only non tumor in the block
+    "2": "This block only contains negative PDL1 cells", # only pdl1 negative in the block
+    "3": "This block only contains positive PDL1 cells", # only positive pdl1 in the block
+
+    "1_2": "This block only contains non-tumor and negative PDL1 cells", # only non tumor and neg pdl1 in the block
+    "1_3": "This block only contains non-tumor and positive PDL1 cells", # only non tumor and pos pdl1 in the block
+    "2_3": "This block only contains negative PDL1 and positive PDL1 cells", # only pdl1 neg and pdl1 pos in the block
+    "1_2_3": "This block only contains non-tumor, negative PDL1 and positive PDL1 cells", # only non tumor, neg pdl1 and pos pdl1 in the block
+
+    "0_1": "This block only contains unidentified and non-tumor cells", # only no class and non tumor in the block
+    "0_2": "This block only contains unidentified and negative PDL1 cells", # only no class and pdl1 neg in the block
+    "0_3": "This block only contains unidentified and positive PDL1 cells", # only no class and pdl1 pos in the block
+
+    "0_1_2": "This block only contains unidentified, non-tumor and PDL1 negative cells", # only no class, no tumor and pdl1 neg
+    "0_1_3": "This block only contains unidentified, non-tumor and PDL1 positivve cells", # only no class, no tumor, pdl1 pos
+    "0_2_3": "This block only contains unidentified, PDL1 negative and PDL1 positive cells", # only no class, pdl1 neg and pdl1 pos
+
+    "0_1_2_3": "This block contains unidentified, non-tumor, PDL1 negative and PDL1 positive cells" # every possible combination in the block
+}
+
+PATCH_DECODE_MAP: dict[str, str] = {
+    "4": "1_3",
+    "5": "2_3",
+    "6": "1_2_3",
+    "7": "1_2"
+}
+
 class PatchProcesser(object):
 
+    # lowest abstarction level - patch level
     PATCH_DATA_MAP: dict[str, int] = {
         "ni": 0, # no class
         "3": 1, # non tumor
@@ -44,7 +98,7 @@ class PatchProcesser(object):
             jepa_classlist_string = "_".join(jepa_classes)
             return self.PATCH_DATA_MAP[jepa_classlist_string]
         return self.PATCH_DATA_MAP["ni"]
-    
+
     def __call__(self, x: torch.Tensor, batch_bbox: list[dict[str, Any]]) -> torch.Tensor:
         B, C, H, W = x.shape
 
@@ -75,3 +129,37 @@ class PatchProcesser(object):
         batch_md_tensor = torch.tensor(batch_patch_metadata, device=x.device, dtype=torch.long)
         assert batch_md_tensor.shape[0] == B
         return batch_md_tensor
+
+def get_block_class(all_patch_data: torch.Tensor, block_indices: torch.Tensor, batch_idx: int):
+
+    # patch classes containing cell combinations
+    complex_patch_classes = [4, 5, 6, 7]
+    
+    # tensor with shape [N], meaning there is class paired to every target patch
+    patch_indices = all_patch_data[batch_idx].index_select(dim=0, index=block_indices)
+
+    patch_idx_list = patch_indices.tolist()
+
+    patch_idx_unfiltered = []
+
+    for index in patch_idx_list:
+        if index in complex_patch_classes:
+            basic_classes = [int(item) for item in PATCH_DECODE_MAP[str(index)].split("_")]
+            patch_idx_unfiltered.extend(basic_classes)
+        else:
+            patch_idx_unfiltered.append(index)
+
+    patch_idx_unfiltered = torch.tensor(patch_idx_unfiltered, device=all_patch_data.device)
+
+    # get only unique classes
+    unique_classes: torch.Tensor = torch.unique(patch_idx_unfiltered)
+
+    # convert to list
+    unique_sorted = sorted(unique_classes.tolist())
+    unique_sorted = [str(item) for item in unique_sorted]
+
+    # join so the indexing can be done
+    classlist_string = "_".join(unique_sorted)
+
+    # return corresponding summary class integer
+    return torch.tensor([BLOCK_DATA_MAP[classlist_string]], device=all_patch_data.device)

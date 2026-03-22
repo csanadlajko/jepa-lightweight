@@ -2,7 +2,8 @@ from src.parser.parser import parse_jepa_args
 from src.models.vit import VisionTransformer
 from src.models.predictor import (
     ViTPredictor,
-    CellTypePredictor
+    CellTypePredictor,
+    BlockTypePredictor
 )
 from src.train.train_ijepa import (
     train, # main JEPA training loop for creating the representational space
@@ -88,25 +89,27 @@ if __name__ == "__main__":
         num_heads=args.num_heads,
         tokenizer=tokenizer,
         text_encoder=text_encoder,
-        num_classes=args.num_classes
+        num_classes=args.num_classes,
+        num_targets=args.num_target
     ).to(device)
 
-    cell_predictor = CellTypePredictor(embed_dim=args.embed_dim).to(device)
     patch_processor = PatchProcesser(
         patch_size=args.patch_size
     )
 
+    block_predictor = BlockTypePredictor(embed_dim=args.embed_dim).to(device)
+
     teacher_model.apply(init_weights)
     student_model.apply(init_weights)
     predictor.apply(init_weights)
-    cell_predictor.apply(init_weights)
+    block_predictor.apply(init_weights)
 
     model_config = get_model_config(
         student_model,
         predictor,
         args.lr,
         args.epochs,
-        cell_predictor,
+        block_predictor,
         args.finetune_lr
     )
 
@@ -162,12 +165,6 @@ if __name__ == "__main__":
         if (epoch+1) % 10 == 0:
             student_scheduler.step()
         jepa_loss_per_epoch.append(loss_epoch)
-    
-    if args.debug == "y":
-        torch.save(student_model.state_dict(), f"{result_folder}/trained_student_jepa_{run_identifier}.pth")
-        torch.save(teacher_model.state_dict(), f"{result_folder}/teacher_model_jepa_{run_identifier}.pth")
-        torch.save(predictor.state_dict(), f"{result_folder}/trained_predictor_jepa_{run_identifier}.pth")
-
 
     for epoch in range(args.epochs):
         log_message(f"=== Classification finetuning EPOCH {epoch+1}/{args.epochs} ===", "info")
@@ -183,20 +180,19 @@ if __name__ == "__main__":
                 multimodal=False ## false in every case to prevent leakage !!
             )
         else:
-            # mock batch size to 1 in order to cell predictor to work
-            args.batch_size = 1
             cls_loss_at_epoch, accuracy_epoch = train_cell_predictor(
                 student_mod=student_model,
                 loader=train_loader,
-                optim_predictor=model_config["optim_cell_predictor"],
+                optim_block_predictor=model_config["optim_block_predictor"],
                 predictor=predictor,
-                cell_predictor=cell_predictor,
+                cell_predictor=None,
                 device=device,
                 cell_mask=cell_mask,
                 patch_processer=patch_processor,
-                loss_fn=model_config["cell_predictor_loss"],
+                loss_fn=model_config["block_predictor_loss"],
                 cell_percentage=args.cell_percentage,
-                normal_mask=mask
+                normal_mask=mask,
+                block_predictor=block_predictor
             )
         accuracy_per_epoch.append(accuracy_epoch)
         cls_loss_per_epoch.append(cls_loss_at_epoch)
@@ -206,7 +202,7 @@ if __name__ == "__main__":
         torch.save(teacher_model.state_dict(), f"{result_folder}/teacher_model_cls_{run_identifier}.pth")
         torch.save(predictor.state_dict(), f"{result_folder}/trained_predictor_cls_{run_identifier}.pth")
         if args.dataset == "pdl1":
-            torch.save(cell_predictor.state_dict(), f"{result_folder}/trained_cell_pred_{run_identifier}.pth")
+            torch.save(block_predictor.state_dict(), f"{result_folder}/trained_block_pred_{run_identifier}.pth")
 
     if args.dataset != "pdl1":
         cls_acc = eval_cls(
