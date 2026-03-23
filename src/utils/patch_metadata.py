@@ -163,3 +163,87 @@ def get_block_class(all_patch_data: torch.Tensor, block_indices: torch.Tensor, b
 
     # return corresponding summary class integer
     return torch.tensor([BLOCK_DATA_MAP[classlist_string]], device=all_patch_data.device)
+
+class BlockProcessor(object):
+
+    def __init__(self, patch_size, image_size):
+        self.patch_size = patch_size
+        self.image_size = image_size
+
+    def _get_block_corner_coordinates(self, target_block: torch.Tensor) -> tuple[tuple[torch.Tensor, torch.Tensor], tuple[torch.Tensor, torch.Tensor]]:
+        num_patches_per_side = self.image_size // self.patch_size
+
+        top_left_patch_idx = torch.min(target_block).item()
+        bottom_right_patch_idx = torch.max(target_block).item()
+
+        y_pixel_step_1 = top_left_patch_idx // num_patches_per_side
+        x_pixel_step_1 = top_left_patch_idx % num_patches_per_side
+
+        top_left_pixel_coordinates = (x_pixel_step_1 * self.patch_size, y_pixel_step_1 * self.patch_size)
+        
+        y_pixel_step_2 = bottom_right_patch_idx // num_patches_per_side
+        x_pixel_step_2 = bottom_right_patch_idx % num_patches_per_side
+
+        _top_left_last_idx = (x_pixel_step_2 * self.patch_size, y_pixel_step_2 * self.patch_size)
+        bottom_right_pixel_coordinates = (_top_left_last_idx[0] + self.patch_size, _top_left_last_idx[1] + self.patch_size)
+
+        return top_left_pixel_coordinates, bottom_right_pixel_coordinates
+    
+    def _get_intersection_area(self, target_block: torch.Tensor, box_coordinates: list[int]):
+        top_left_block, bottom_right_block = self._get_block_corner_coordinates(target_block)
+
+        x_t_1, y_t_1 = top_left_block[0], top_left_block[1]
+        x_t_2, y_t_2 = bottom_right_block[0], bottom_right_block[1]
+
+        x_b_1, y_b_1 = box_coordinates[0], box_coordinates[1]
+        x_b_2 = x_b_1 + box_coordinates[2]
+        y_b_2 = y_b_1 + box_coordinates[3]
+
+        x_left = max(x_t_1, x_b_1)
+        x_right = min(x_t_2, x_b_2)
+        y_top = max(y_t_1, y_b_1)
+        y_bottom = min(y_t_2, y_b_2)
+
+        # check intersection
+        if x_right > x_left and y_top < y_bottom:
+            return (x_right-x_left) * (y_bottom-y_top)
+        else:
+            return 0
+
+    def _get_largest_bbox_intersection(self, target_block: torch.Tensor, bbox_list: list[list[int]], int_labels: list[int], str_labels: list[str]):
+        assert len(int_labels) == len(bbox_list)
+        index = None
+        max_area = 0
+        
+        for i, bbox in enumerate(bbox_list):
+            area = self._get_intersection_area(target_block, bbox)
+            if area > max_area:
+                max_area = area
+                index = i
+
+        return int_labels[index], str_labels[index]
+    
+    def __call__(self, batch_bbox_list: list[list[list[int]]], batch_target_block: list[list[torch.Tensor]], string_labels: list[list[str]], int_labels: list[list[int]]):
+        assert len(batch_bbox_list) == len(batch_target_block)
+        assert len(string_labels) == len(int_labels)
+        assert len(int_labels) == len(batch_bbox_list)
+
+        total_data_int = []
+        total_data_string = []
+
+        for i, image_bbox_list in enumerate(batch_bbox_list):
+            batch_classes_int = []
+            batch_classes_string = []
+            for target_indices in batch_target_block[i]:
+                gt_block_class, gt_block_name = self._get_largest_bbox_intersection(target_indices, image_bbox_list, int_labels, string_labels)
+                batch_classes_string.append(gt_block_name)
+                batch_classes_int.append(gt_block_class)
+            total_data_int.append(batch_classes_int)
+            total_data_string.append(batch_classes_string)
+
+        tens_int_classes = torch.tensor(total_data_int, device=batch_target_block[0][0].device)
+
+        assert tens_int_classes.shape[0] == len(batch_bbox_list)
+        assert tens_int_classes.shape[1] == len(batch_target_block[0])
+
+        return tens_int_classes, total_data_string

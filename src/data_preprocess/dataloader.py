@@ -3,6 +3,7 @@ from torchvision import datasets, transforms
 import torch
 from .healthcare.mri_dataprocess import MRIImageDataset
 from .healthcare.lung_cancer_dataprocess import LungCancerDataset, PDL1Dataset
+from .coco.coco import COCODataset
 from .cifar10dot1 import CIFAR10dot1Dataset
 from ..parser.parser import parse_jepa_args
 
@@ -183,9 +184,9 @@ def load_dataset(dataset_name: str, input_folder: str = "", reverse: str = "n"):
 
 def load_coco_dataset(input_dir: str, annotation_json: str, reverse):
     if reverse=="y":
-        full_dataset = PDL1Dataset(input_dir, annotation_json, test_transform)
+        full_dataset = COCODataset(input_dir, annotation_json, test_transform)
     else:
-        full_dataset = PDL1Dataset(input_dir, annotation_json, train_transform)
+        full_dataset = COCODataset(input_dir, annotation_json, train_transform)
 
     full_loader = DataLoader(
         dataset=full_dataset,

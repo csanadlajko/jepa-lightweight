@@ -21,7 +21,7 @@ from src.data_preprocess.dataloader import load_dataset
 from src.utils.config_ijepa import get_model_config, init_weights
 from src.utils.masking import Mask, CellMask
 from src.utils.patch_metadata import PatchProcesser
-from src.utils.logging import log_message
+from utils.logging_module import log_message
 from transformers import AutoTokenizer, AutoModelForCausalLM
 import torch
 import datetime

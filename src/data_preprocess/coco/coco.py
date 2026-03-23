@@ -17,7 +17,8 @@ class COCODataset(Dataset):
 
         with open(annotation_json) as f:
             coco_data = json.load(f)
-
+    
+        self.category_map = { str(categ["id"]): categ["name"] for categ in coco_data["categories"] }
         self.images = {f["id"]: f["file_name"] for f in coco_data["images"]}
         self.annotations = {}
         for ann in coco_data["annotations"]:
@@ -46,16 +47,19 @@ class COCODataset(Dataset):
         annotations = self.annotations.get(img_id, [])
         boxes = []
         labels = []
+        string_labels = []
 
         for ann in annotations:
             x, y, w, h = ann["bbox"]
             boxes.append([x*scale_x, y*scale_y, w*scale_x, h*scale_y])
             labels.append(ann["category_id"])
+            string_labels.append(self.category_map[str(ann["category_id"])])
 
         target = {
             "boxes": boxes,
             "labels": labels,
-            "image_id": img_id
+            "image_id": img_id,
+            "string_labels": string_labels
         }
 
         if self.transforms:
