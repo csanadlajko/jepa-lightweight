@@ -172,6 +172,26 @@ def load_dataset(dataset_name: str, input_folder: str = "", reverse: str = "n"):
         train_loader, test_loader = get_pdl1_dataset(input_folder, args.annotation_path, reverse)
         datasets["train_loader"] = train_loader
         datasets["test_loader"] = test_loader
+    elif dataset_name == "coco":
+        train_loader = load_coco_dataset(args.coco_train_folder, args.coco_train_annotation, reverse)
+        test_loader = load_coco_dataset(args.coco_test_folder, args.coco_test_annotation, reverse)
+        datasets["train_loader"] = train_loader
+        datasets["test_loader"] = test_loader
     else:
         datasets["error"] = "Dataset has not been registered yet for JEPA model!"
     return datasets
+
+def load_coco_dataset(input_dir: str, annotation_json: str, reverse):
+    if reverse=="y":
+        full_dataset = PDL1Dataset(input_dir, annotation_json, test_transform)
+    else:
+        full_dataset = PDL1Dataset(input_dir, annotation_json, train_transform)
+
+    full_loader = DataLoader(
+        dataset=full_dataset,
+        batch_size=args.batch_size,
+        shuffle=True,
+        collate_fn=PDL1Dataset.collate_fn
+    )
+    
+    return full_loader
