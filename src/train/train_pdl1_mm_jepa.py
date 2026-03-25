@@ -14,7 +14,7 @@ def train_pdl1(
         momentum, 
         ijepa_loss,
         device,
-        cell_mask,
+        block_proc,
         normal_mask,
         cell_percentage=20
     ):
@@ -38,8 +38,17 @@ def train_pdl1(
         # context_mask_indices = mask_meta["context_patch_indices"]
         # target_patch_labels = mask_meta["target_patch_labels"]
         # context_patch_labels = mask_meta["context_patch_labels"]
+        batch_bbox_list = []
+        int_labels = []
+        string_labels = []
+
+        for batch in annotation:
+            batch_bbox_list.append(batch["boxes"])
+            int_labels.append(batch["labels"])
+            string_labels.append(batch["string_labels"])
 
         context_masks, target_masks = normal_mask(images)
+        _, classes_string = block_proc(batch_bbox_list, target_masks, string_labels, int_labels)
 
         with torch.no_grad():
             ## create teacher tokens for full image
@@ -57,10 +66,11 @@ def train_pdl1(
             student_tokens, 
             context_masks, 
             target_masks, 
-            None,
+            classes_string,
             multimodal=False, 
             return_cls_only=False,
-            cell_mask=False
+            cell_mask=False,
+            local_cls=True
         )
 
         optim_student.zero_grad()
@@ -128,7 +138,8 @@ def train_cell_predictor(
                 None,
                 multimodal=False, 
                 return_cls_only=False,
-                cell_mask=False
+                cell_mask=False,
+                local_cls=False
             )
 
         ## average loss of all predicted target values

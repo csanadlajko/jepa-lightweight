@@ -52,7 +52,8 @@ class COCODataset(Dataset):
         for ann in annotations:
             x, y, w, h = ann["bbox"]
             boxes.append([x*scale_x, y*scale_y, w*scale_x, h*scale_y])
-            labels.append(ann["category_id"])
+            subtracted_category: int = ann["category_id"] - 1
+            labels.append(subtracted_category)
             string_labels.append(self.category_map[str(ann["category_id"])])
 
         target = {
@@ -63,9 +64,9 @@ class COCODataset(Dataset):
         }
 
         if self.transforms:
-            img = self.transforms(img)
+            image = self.transforms(image)
 
-        return img, target
+        return image, target
     
     @abstractmethod
     def collate_fn(batch):

@@ -75,14 +75,13 @@ class ViTPredictor(nn.Module):
         self.tokenizer = tokenizer
         self.text_encoder = text_encoder
 
-    def forward(self, x, context_mask, target_mask, labels: torch.Tensor, multimodal: bool, return_cls_only = False, cell_mask=False, block_cls=False):
+    def forward(self, x, context_mask, target_mask, labels: list[list[str]], multimodal: bool, local_cls: bool = False, return_cls_only = False, cell_mask=False, block_cls=False):
         ## x includes cls token on index 0
-
+ 
         B = x.size(0)
         
         x = self.predictor_embed(x)
         
-        # get target positions with padding [B, N, D] where N is padded
         target_positions, pred_target_attn = apply_mask(self.pred_pos_embed.repeat(B, 1, 1), target_mask, predictor=True, use_padding=cell_mask)
         num_target_tokens = target_positions.size(1)
         # in case of padding, the learnable mask tokens are containing the paddings...
@@ -115,8 +114,25 @@ class ViTPredictor(nn.Module):
 
             cls_extended = torch.cat([corresp_cls, batch_block], dim=1)
 
+            # TODO add optional multimodality for the current blocks label(s)
             for att_block in self.pred_blocks:
                 cls_extended = att_block(cls_extended, None)
+
+            if local_cls:
+                current_classes = [image_label[block] for image_label in labels] # len(batch)
+                labels_for_block = [f"this block represents a {c}" for c in current_classes]
+                label_tokens: dict[str, torch.Tensor] = self.tokenizer(labels_for_block, return_tensors='pt', padding=True)
+                label_tokens = {k: v.to(self.device) for k, v in label_tokens.items()}
+                enc_labels = self.text_encoder(**label_tokens, output_hidden_states=True)
+                enc_labels = enc_labels.hidden_states[-1]
+
+                enc_labels = enc_labels.to(self.device)
+
+                enc_labels = self.label_to_embed(enc_labels)
+
+                pred_attended, _ = self.post_pred_mhsa(cls_extended, enc_labels, enc_labels)
+
+                cls_extended = cls_extended + pred_attended
             
             # append only the block cls token
             cls_only = cls_extended[:, 0, :].unsqueeze(1)
@@ -128,30 +144,31 @@ class ViTPredictor(nn.Module):
         predicted_tokens = self.predictor_proj(predicted_tokens)
 
         # only enter if model is ran in multimodal mode
-        if multimodal: 
+        # TODO only enter if GLOBAL multimodality is required
+        # if multimodal:
             
-            label_list = [f"a photo of class: {label}" for label in labels]
+        #     label_list = [f"a photo of class: {label}" for label in labels]
 
-            label_tokens: dict[str, torch.Tensor] = self.tokenizer(label_list, return_tensors='pt', padding=True)
+        #     label_tokens: dict[str, torch.Tensor] = self.tokenizer(label_list, return_tensors='pt', padding=True)
 
-            label_tokens = {k: v.to(self.device) for k, v in label_tokens.items()}
+        #     label_tokens = {k: v.to(self.device) for k, v in label_tokens.items()}
             
-            enc_labels = self.text_encoder(**label_tokens, output_hidden_states=True)
+        #     enc_labels = self.text_encoder(**label_tokens, output_hidden_states=True)
 
-            enc_labels = enc_labels.hidden_states[-1]
+        #     enc_labels = enc_labels.hidden_states[-1]
 
-            num_masks = predicted_tokens.size(0) // B
+        #     num_masks = predicted_tokens.size(0) // B
 
-            enc_labels = enc_labels.unsqueeze(1).expand(-1, num_masks, -1, -1)
-            enc_labels = enc_labels.reshape(-1, enc_labels.size(2), enc_labels.size(3))
+        #     enc_labels = enc_labels.unsqueeze(1).expand(-1, num_masks, -1, -1)
+        #     enc_labels = enc_labels.reshape(-1, enc_labels.size(2), enc_labels.size(3))
 
-            enc_labels = enc_labels.to(self.device)
+        #     enc_labels = enc_labels.to(self.device)
 
-            enc_labels = self.label_to_embed(enc_labels)
+        #     enc_labels = self.label_to_embed(enc_labels)
 
-            pred_attended, _ = self.post_pred_mhsa(predicted_tokens, enc_labels, enc_labels)
+        #     pred_attended, _ = self.post_pred_mhsa(predicted_tokens, enc_labels, enc_labels)
 
-            predicted_tokens = predicted_tokens + pred_attended
+        #     predicted_tokens = predicted_tokens + pred_attended
 
         if return_cls_only:
             # full_img = torch.cat([x[:context_length], predicted_tokens], dim=1) ## create new total image embedding with finetuned target predictions -> not neccesary
@@ -215,14 +232,12 @@ class BlockTypePredictor(nn.Module):
     def __init__(self, num_classes=15, embed_dim=256, hidden_dim=128, dropout=0.1):
         super().__init__()
 
-        self.prediction_head = nn.Linear(embed_dim, num_classes)
-
-        # self.prediction_head = nn.Sequential(
-        #     nn.Linear(embed_dim, hidden_dim),
-        #     nn.ReLU(),
-        #     nn.Dropout(dropout),
-        #     nn.Linear(hidden_dim, num_classes)
-        # )
+        self.prediction_head = nn.Sequential(
+            nn.Linear(embed_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Linear(hidden_dim, num_classes)
+        )
 
     def forward(self, x: torch.Tensor, target_patch_indices: list[list[torch.Tensor]], gt_patch_classes: torch.Tensor, loss_fn):
         # x shape is [B, N, D]

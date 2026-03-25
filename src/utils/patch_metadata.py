@@ -221,7 +221,10 @@ class BlockProcessor(object):
                 max_area = area
                 index = i
 
-        return int_labels[index], str_labels[index]
+        if index is not None:
+            return int_labels[index], str_labels[index]
+        
+        return 90, "background"
     
     def __call__(self, batch_bbox_list: list[list[list[int]]], batch_target_block: list[list[torch.Tensor]], string_labels: list[list[str]], int_labels: list[list[int]]):
         assert len(batch_bbox_list) == len(batch_target_block)
@@ -235,7 +238,7 @@ class BlockProcessor(object):
             batch_classes_int = []
             batch_classes_string = []
             for target_indices in batch_target_block[i]:
-                gt_block_class, gt_block_name = self._get_largest_bbox_intersection(target_indices, image_bbox_list, int_labels, string_labels)
+                gt_block_class, gt_block_name = self._get_largest_bbox_intersection(target_indices, image_bbox_list, int_labels[i], string_labels[i])
                 batch_classes_string.append(gt_block_name)
                 batch_classes_int.append(gt_block_class)
             total_data_int.append(batch_classes_int)

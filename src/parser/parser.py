@@ -26,7 +26,12 @@ def parse_jepa_args():
     parser.add_argument("--reverse_transform", help="switches the transformation between the train and test dataset (default: n)", default="n", type=str)
     parser.add_argument("--annotation_path", help="path of the annontation file(s) (default: '')", default="", type=str)
     parser.add_argument("--cell_percentage", help="percentage of cells to observe when masking target (defult: 20pct)", default=20, type=int)
-    parser.add_argument("--finetune_lr", help="learning rate of the fine tuning algorithm (defaul 0.005)", default=0.005, type=int)
+    parser.add_argument("--finetune_lr", help="learning rate of the fine tuning algorithm (default 0.005)", default=0.005, type=int)
+    parser.add_argument("--num_block_categories", help="number of classes when classifying target blocks (default: 90)", default=90, type=int)
+    parser.add_argument("--coco_train_folder", help="folder of coco train images (default: '')", default="", type=str)
+    parser.add_argument("--coco_test_folder", help="folder of coco test images (default: '')", default="", type=str)
+    parser.add_argument("--coco_train_annotation", help="path of the coco train annotation json (default: '')", default="", type=str)
+    parser.add_argument("--coco_test_annotation", help="path of the coco test annotation json (default: '')", default="", type=str)
 
     args = parser.parse_args()
 

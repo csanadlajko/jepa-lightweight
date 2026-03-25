@@ -20,8 +20,8 @@ from src.train.train_pdl1_mm_jepa import (
 from src.data_preprocess.dataloader import load_dataset
 from src.utils.config_ijepa import get_model_config, init_weights
 from src.utils.masking import Mask, CellMask
-from src.utils.patch_metadata import PatchProcesser
-from utils.logging_module import log_message
+from src.utils.patch_metadata import PatchProcesser, BlockProcessor
+from src.utils.logging_module import log_message
 from transformers import AutoTokenizer, AutoModelForCausalLM
 import torch
 import datetime
@@ -97,7 +97,9 @@ if __name__ == "__main__":
         patch_size=args.patch_size
     )
 
-    block_predictor = BlockTypePredictor(embed_dim=args.embed_dim).to(device)
+    block_proc = BlockProcessor(args.patch_size, args.image_size)
+
+    block_predictor = BlockTypePredictor(embed_dim=args.embed_dim, num_classes=args.num_block_categories).to(device)
 
     teacher_model.apply(init_weights)
     student_model.apply(init_weights)
@@ -129,7 +131,7 @@ if __name__ == "__main__":
 
         log_message(f"=== EPOCH {epoch + 1}/{args.epochs} ===", "info")
 
-        if args.dataset != "pdl1":
+        if args.dataset != "pdl1" and args.dataset != "coco":
             ## train JEPA on regular classification tasks with cls token
             loss_epoch = train(
                 teacher_mod=teacher_model, 
@@ -158,7 +160,7 @@ if __name__ == "__main__":
                 ijepa_loss=model_config["ijepa_loss"],
                 cell_percentage=args.cell_percentage,
                 device=device,
-                cell_mask=cell_mask,
+                block_proc=block_proc,
                 normal_mask=mask
             )
 
@@ -168,7 +170,7 @@ if __name__ == "__main__":
 
     for epoch in range(args.epochs):
         log_message(f"=== Classification finetuning EPOCH {epoch+1}/{args.epochs} ===", "info")
-        if args.dataset != "pdl1":
+        if args.dataset != "pdl1" and args.dataset != "coco":
             cls_loss_at_epoch, accuracy_epoch = train_cls(
                 student_model=student_model, 
                 train_dataset=train_loader, 

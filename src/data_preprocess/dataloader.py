@@ -174,8 +174,7 @@ def load_dataset(dataset_name: str, input_folder: str = "", reverse: str = "n"):
         datasets["train_loader"] = train_loader
         datasets["test_loader"] = test_loader
     elif dataset_name == "coco":
-        train_loader = load_coco_dataset(args.coco_train_folder, args.coco_train_annotation, reverse)
-        test_loader = load_coco_dataset(args.coco_test_folder, args.coco_test_annotation, reverse)
+        train_loader, test_loader = load_coco_dataset(args.coco_train_folder, args.coco_train_annotation, reverse)
         datasets["train_loader"] = train_loader
         datasets["test_loader"] = test_loader
     else:
@@ -184,15 +183,30 @@ def load_dataset(dataset_name: str, input_folder: str = "", reverse: str = "n"):
 
 def load_coco_dataset(input_dir: str, annotation_json: str, reverse):
     if reverse=="y":
-        full_dataset = COCODataset(input_dir, annotation_json, test_transform)
+        full_dataset_train = COCODataset(input_dir, annotation_json, test_transform)
+        full_dataset_test = COCODataset(input_dir, annotation_json, train_transform)
     else:
-        full_dataset = COCODataset(input_dir, annotation_json, train_transform)
+        full_dataset_train = COCODataset(input_dir, annotation_json, train_transform)
+        full_dataset_test = COCODataset(input_dir, annotation_json, test_transform)
+    
+    train_size: int = int(len(full_dataset_train)*0.8)
+    test_size: int = len(full_dataset_train) - train_size
 
-    full_loader = DataLoader(
-        dataset=full_dataset,
+    train_data, test_indices = random_split(full_dataset_train, [train_size, test_size])
+
+    test_data = torch.utils.data.Subset(full_dataset_test, test_indices.indices)
+
+    train_loader = DataLoader(
+        dataset=train_data,
         batch_size=args.batch_size,
         shuffle=True,
-        collate_fn=PDL1Dataset.collate_fn
+        collate_fn=COCODataset.collate_fn
+    )
+    test_loader = DataLoader(
+        dataset=test_data,
+        batch_size=args.batch_size,
+        shuffle=False,
+        collate_fn=COCODataset.collate_fn
     )
     
-    return full_loader
+    return train_loader, test_loader
