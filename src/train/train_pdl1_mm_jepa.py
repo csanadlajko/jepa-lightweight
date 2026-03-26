@@ -3,6 +3,7 @@ from ..utils.masking import apply_mask
 from ..utils.ema import _ema_update
 import torch.nn.functional as F
 from typing import Any
+from tqdm import tqdm
 
 def train_pdl1(
         teacher_mod, 
@@ -26,7 +27,9 @@ def train_pdl1(
     total_loss = 0.0
     num_batches = 0
 
-    for (images, annotation) in loader:
+    bar = tqdm(total=len(loader))
+
+    for i, (images, annotation) in enumerate(loader):
         ## annotation -> len(batch_size) list containing annotations for each image
         images = images.to(device)
 
@@ -87,8 +90,12 @@ def train_pdl1(
         
         total_loss += loss_curr.item()
         num_batches += 1
+        if i+1 % 100 == 0:
+            print(f"current loss is: {loss_curr.item():.3f}")
+        bar.update(1)
 
     avg_loss = total_loss / num_batches if num_batches > 0 else 0.0
+    bar.close()
     print(f"avg. training loss this epoch: {avg_loss:.4f}")
 
 def train_cell_predictor(
@@ -99,7 +106,7 @@ def train_cell_predictor(
         cell_predictor,
         device,
         cell_mask,
-        patch_processer,
+        block_processor,
         loss_fn,
         normal_mask,
         block_predictor,
@@ -113,6 +120,8 @@ def train_cell_predictor(
     num_batches = 0
     running_acc = 0.0
 
+    bar = tqdm(total=len(loader))
+
     for (images, annotation) in loader:
         ## annotation -> len(batch_size) list containing annotations for each image
         images = images.to(device)
@@ -120,13 +129,24 @@ def train_cell_predictor(
         ## acquire context and target cell masks for current batch (patch indices)
         ## size: len(batch)
         # mask_meta: list[dict[str, Any]] = cell_mask(cell_percentage, annotation)
-        patch_meta: torch.Tensor = patch_processer(images, annotation)
 
         # target_mask_indices: list[list[torch.Tensor]] = mask_meta["target_patch_indices"]
         # context_mask_indices = mask_meta["context_patch_indices"]
         # target_patch_labels = mask_meta["target_patch_labels"]
 
         context_masks, target_masks = normal_mask(images)
+
+        batch_bbox_list = []
+        int_labels = []
+        string_labels = []
+
+        for batch in annotation:
+            batch_bbox_list.append(batch["boxes"])
+            int_labels.append(batch["labels"])
+            string_labels.append(batch["string_labels"])
+
+        context_masks, target_masks = normal_mask(images)
+        tens_int_classes, _ = block_processor(batch_bbox_list, target_masks, string_labels, int_labels)
 
         with torch.no_grad():
             student_tokens, _ = student_mod(images, masks=context_masks)
@@ -145,12 +165,16 @@ def train_cell_predictor(
         ## average loss of all predicted target values
         # target instance mask is list[list[torch.Tensor]]
 
-        loss_all, accuracy = block_predictor(
-            block_cls_tokens,
-            target_masks,
-            patch_meta,
-            loss_fn
+        pred_classes = block_predictor(
+            block_cls_tokens
         )
+
+        # transform into [B*target_blocks, num_classes]
+        pred_classes_flat = pred_classes.view(-1, 91)
+
+        # transform into [B*target_blocks]
+        tens_int_flat = tens_int_classes.view(-1)
+        loss_all = loss_fn(pred_classes_flat, tens_int_flat)
 
         # loss_all, accuracy = cell_predictor(
         #     predicted_target_tokens,
@@ -164,15 +188,20 @@ def train_cell_predictor(
         loss_all.backward()
 
         optim_block_predictor.step()
+        pred_labels = pred_classes_flat.argmax(dim=1)
+        correct = (pred_labels == tens_int_flat)
+        running_acc = correct.sum().item() / correct.numel()
 
         total_loss += loss_all.item()
         num_batches += 1
-        running_acc += accuracy
+        # running_acc += accuracy
+        bar.update(1)
 
     avg_loss = total_loss / num_batches
     avg_acc = running_acc / num_batches
     print(f"=== running accuracy this cell prediction epoch: {avg_acc:.2f}% ===")
     print(f"=== avg loss this cell prediction epoch: {avg_loss:.4f} ===")
+    bar.close()
     return avg_loss, 0
 
 def eval_cell_predictor(

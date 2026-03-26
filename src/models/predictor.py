@@ -239,43 +239,7 @@ class BlockTypePredictor(nn.Module):
             nn.Linear(hidden_dim, num_classes)
         )
 
-    def forward(self, x: torch.Tensor, target_patch_indices: list[list[torch.Tensor]], gt_patch_classes: torch.Tensor, loss_fn):
-        # x shape is [B, N, D]
-        # where N is the CLS token for every block in the image
-
-        total_loss = []
-        total_samples = 0
-        total_correct = 0
-
-        # first iteration for every tensor in the batch
-        for b_idx, target_blocks in enumerate(target_patch_indices):
-
-            block_classes = []
-
-            # second iteration for every target block in the corresponding tensor
-            for block_indices in target_blocks:
-                block_gt_class: torch.Tensor = get_block_class(gt_patch_classes, block_indices, b_idx)
-                block_classes.append(block_gt_class)
-
-            # get shape [num_target] tensor
-            block_classes_tens = torch.tensor(block_classes, device=x.device)
-
-            # get shape [num_target, embed_dim] tensor
-            batch_cls_tokens = x[b_idx, :, :]
-
-            # get shape [num_target, num_classes] tensor
-            predicted_block_class = self.prediction_head(batch_cls_tokens)
-
-            loss = loss_fn(predicted_block_class, block_classes_tens)
-            total_loss.append(loss)
-
-            pred_labels = torch.argmax(predicted_block_class, dim=1)
-
-            correct = (pred_labels == block_classes_tens).sum().item()
-
-            total_correct += correct
-            total_samples += block_classes_tens.numel()
-        
-        avg_loss = sum(total_loss) / len(total_loss)
-        avg_accuracy = (total_correct / total_samples) * 100
-        return avg_loss, avg_accuracy
+    def forward(self, predicted_block_cls: torch.Tensor):
+        # from [B, N_cls, D] to [B, N_cls, T]
+        pred_classes = self.prediction_head(predicted_block_cls)
+        return pred_classes
