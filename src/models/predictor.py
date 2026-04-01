@@ -1,9 +1,8 @@
 import torch.nn as nn
 import torch
 from ..utils.masking import apply_mask
-from ..utils.pos_encoding import sinusoidal_pos_embedding2d
+from ..utils.pos_encoding import sinusoidal_pos_embedding2d, sinusoidal_block_pos_embedding2d, get_block_size
 from .vit import TransformerEncoder
-from ..utils.patch_metadata import get_block_class
 
 class ViTPredictor(nn.Module):
 
@@ -25,6 +24,7 @@ class ViTPredictor(nn.Module):
         if pred_dim is None:
             pred_dim = embed_dim
         self.num_targets = num_targets
+        self.num_patches = num_patches
 
         self.predictor_embed = nn.Linear(embed_dim, pred_dim, bias=True)
         self.mask_token = nn.Parameter(torch.zeros(1, 1, pred_dim), requires_grad=True) # learnable parameters to predict masked region
@@ -52,6 +52,7 @@ class ViTPredictor(nn.Module):
 
         self.cls_fc1 = nn.Linear(embed_dim, embed_dim // 2)
         self.cls_fc2 = nn.Linear(embed_dim // 2, num_classes)
+        self.cls_position = nn.Parameter(torch.zeros(1, 1, embed_dim), requires_grad=True)
 
         nn.init.xavier_uniform_(self.cls_fc1.weight)
         nn.init.zeros_(self.cls_fc1.bias)
@@ -82,6 +83,11 @@ class ViTPredictor(nn.Module):
         N_ctx = x.size(1)
         
         x = self.predictor_embed(x)
+
+        h, w = get_block_size(list(target_mask[0][0]), self.num_patches)
+        block_cls_pos_enc = sinusoidal_block_pos_embedding2d(h, w, x.shape[2], x.device).repeat(B, 1, 1)
+        cls_pos_enc = self.cls_position.repeat(B, 1, 1)
+        block_final_pos = torch.cat([block_cls_pos_enc, cls_pos_enc], dim=1)
         
         target_positions, pred_target_attn = apply_mask(self.pred_pos_embed.repeat(B, 1, 1), target_mask, predictor=True, use_padding=cell_mask)
         num_target_tokens = target_positions.size(1)
@@ -105,14 +111,6 @@ class ViTPredictor(nn.Module):
         block_cls_tokens_raw = []
         for block in range(self.num_targets):
             num_block_tokens = (predicted_tokens.shape[1] // self.num_targets)+1
-            print(num_block_tokens)
-            # positional embedding needed
-            # also verification, that the selected predicted block really is a predicted block
-            # so the selected start:end interval really is a target block, or just independent patch indices
-            block_pos_enc = sinusoidal_pos_embedding2d(num_block_tokens, predicted_tokens.shape[2], x.device)
-            print(block_pos_enc.shape)
-            block_pos_enc = block_pos_enc.repeat(B, 1, 1)
-            print(block_pos_enc.shape)
             block_end = int((block + 1) * (predicted_tokens.shape[1] / self.num_targets))
             block_start = int(((block + 1) * (predicted_tokens.shape[1] / self.num_targets)) - (predicted_tokens.shape[1] / self.num_targets))
 
@@ -121,11 +119,7 @@ class ViTPredictor(nn.Module):
             corresp_cls = corresp_cls.unsqueeze(1)
 
             cls_extended = torch.cat([corresp_cls, batch_block], dim=1)
-
-            print(f"{(predicted_tokens.shape[1] // self.num_targets)+1} should match {cls_extended.shape}")
-            print(f"block pos enc shape is : {block_pos_enc.shape}, cls ext shape is")
-
-            cls_extended = cls_extended + block_pos_enc
+            cls_extended = cls_extended + block_final_pos
 
             for att_block in self.pred_blocks:
                 cls_extended = att_block(cls_extended, None)

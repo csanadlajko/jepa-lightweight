@@ -41,3 +41,26 @@ def sinusoidal_pos_embedding2d(num_patches, embed_dim, device):
     pos_embed = torch.cat((x_pos_embeddings, y_pos_embeddings), -1).to(device)
 
     return pos_embed
+
+def get_block_size(block_indices: list, total_patches: int) -> tuple[int, int]:
+    row_len: int = total_patches ** 0.5
+    start_idx: int = block_indices[0]
+    targ_next_idx: int = start_idx + row_len
+    i: int = 0
+    while block_indices[i] != targ_next_idx:
+        i+=1
+    
+    h: int = int(len(block_indices) / i)
+    return h, i
+    
+def sinusoidal_block_pos_embedding2d(H, W, embed_dim, device):
+    x_positions = torch.arange(W).repeat(H)
+    y_positions = torch.arange(H).repeat_interleave(W)
+
+    x_positions = x_positions.reshape(-1, 1)
+    y_positions = y_positions.reshape(-1, 1)
+
+    x_pos_embeddings = generate_sinusoidal_1d(x_positions, embed_dim)
+    y_pos_embeddings = generate_sinusoidal_1d(y_positions, embed_dim)
+
+    return torch.cat((x_pos_embeddings, y_pos_embeddings), -1).to(device)
