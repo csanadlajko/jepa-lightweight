@@ -51,3 +51,12 @@ def init_weights(model):
     elif isinstance(model, nn.LayerNorm):
         torch.nn.init.ones_(model.weight)
         torch.nn.init.zeros_(model.bias)
+
+def create_loss_weights(occ_map):
+    sorted_categ = sorted([int(key) for key in occ_map.keys()])
+    sorted_occ = [occ_map[str(i)] for i in sorted_categ]
+    sorted_tens = torch.tensor(sorted_occ)
+    class_weights = 1.0 / (sorted_tens.float() + 1e-6)
+    class_weights = class_weights / class_weights.sum() * 90
+    extended = torch.cat([class_weights, class_weights[:1]])
+    return extended

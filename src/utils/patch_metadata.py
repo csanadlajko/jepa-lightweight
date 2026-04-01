@@ -1,5 +1,6 @@
 import torch
 from typing import Any
+import json
 
 ## ntc: non tumor cell
 ## ni (no information): no class in the current patch
@@ -169,6 +170,7 @@ class BlockProcessor(object):
     def __init__(self, patch_size, image_size):
         self.patch_size = patch_size
         self.image_size = image_size
+        self.categ_map = self._convert_coco_classes()
 
     def _get_block_corner_coordinates(self, target_block: torch.Tensor) -> tuple[tuple[torch.Tensor, torch.Tensor], tuple[torch.Tensor, torch.Tensor]]:
         num_patches_per_side = self.image_size // self.patch_size
@@ -189,7 +191,7 @@ class BlockProcessor(object):
 
         return top_left_pixel_coordinates, bottom_right_pixel_coordinates
     
-    def _get_intersection_area(self, target_block: torch.Tensor, box_coordinates: list[int]):
+    def _get_intersection_pct(self, target_block: torch.Tensor, box_coordinates: list[int]):
         top_left_block, bottom_right_block = self._get_block_corner_coordinates(target_block)
 
         x_t_1, y_t_1 = top_left_block[0], top_left_block[1]
@@ -206,26 +208,37 @@ class BlockProcessor(object):
 
         # check intersection
         if x_right > x_left and y_top < y_bottom:
-            return (x_right-x_left) * (y_bottom-y_top)
+            # check intersection percentage
+            intersection_area = (x_right-x_left) * (y_bottom-y_top)
+            bbox_area = box_coordinates[2] * box_coordinates[3]
+            return intersection_area / bbox_area
         else:
             return 0
 
     def _get_largest_bbox_intersection(self, target_block: torch.Tensor, bbox_list: list[list[int]], int_labels: list[int], str_labels: list[str]):
         assert len(int_labels) == len(bbox_list)
         index = None
-        max_area = 0
+        max_pct = 0
         
         for i, bbox in enumerate(bbox_list):
-            area = self._get_intersection_area(target_block, bbox)
-            if area > max_area:
-                max_area = area
+            pct = self._get_intersection_pct(target_block, bbox)
+            if pct > max_pct:
+                max_pct = pct
                 index = i
 
         if index is not None:
-            return int_labels[index], str_labels[index]
+            return self.categ_map[str(int_labels[index])], str_labels[index]
         
-        return 90, "background"
+        return 80, "background"
     
+    def _convert_coco_classes(self):
+        with open("src/data_preprocess/coco/categories.json") as f:
+            categories = json.load(f)
+
+        categ_map = { str(int(categ["id"]) - 1): idx for idx, categ in enumerate(categories["categories"]) }
+
+        return categ_map
+
     def __call__(self, batch_bbox_list: list[list[list[int]]], batch_target_block: list[list[torch.Tensor]], string_labels: list[list[str]], int_labels: list[list[int]]):
         assert len(batch_bbox_list) == len(batch_target_block)
         assert len(string_labels) == len(int_labels)

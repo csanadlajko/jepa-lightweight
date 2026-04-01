@@ -21,9 +21,15 @@ class COCODataset(Dataset):
         self.category_map = { str(categ["id"]): categ["name"] for categ in coco_data["categories"] }
         self.images = {f["id"]: f["file_name"] for f in coco_data["images"]}
         self.annotations = {}
+        self.class_occ_map = {}
         for ann in coco_data["annotations"]:
             # connect annotations to images
             img_id = ann["image_id"]
+            subtr_cat_id = int(ann["category_id"]) - 1
+            if str(subtr_cat_id) in self.class_occ_map.keys():
+                self.class_occ_map[str(subtr_cat_id)] += 1
+            else:
+                self.class_occ_map[str(subtr_cat_id)] = 0
             self.annotations.setdefault(img_id, []).append(ann)
 
         self.ids = list(self.images.keys())

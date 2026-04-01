@@ -5,6 +5,8 @@ from src.models.predictor import (
     CellTypePredictor,
     BlockTypePredictor
 )
+import os
+os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
 from src.train.train_ijepa import (
     train, # main JEPA training loop for creating the representational space
     train_cls, # CLS token supervised training loop
@@ -18,7 +20,7 @@ from src.train.train_pdl1_mm_jepa import (
     eval_cell_predictor # evaluate finetuned JEPA model
 )
 from src.data_preprocess.dataloader import load_dataset
-from src.utils.config_ijepa import get_model_config, init_weights
+from src.utils.config_ijepa import get_model_config, init_weights, create_loss_weights
 from src.utils.masking import Mask, CellMask
 from src.utils.patch_metadata import PatchProcesser, BlockProcessor
 from src.utils.logging_module import log_message
@@ -168,6 +170,13 @@ if __name__ == "__main__":
             student_scheduler.step()
         jepa_loss_per_epoch.append(loss_epoch)
 
+    if args.debug == "y":
+        torch.save(student_model.state_dict(), f"{result_folder}/trained_student_jepa_{run_identifier}.pth")
+        torch.save(teacher_model.state_dict(), f"{result_folder}/teacher_model_jepa_{run_identifier}.pth")
+        torch.save(predictor.state_dict(), f"{result_folder}/trained_predictor_jepa_{run_identifier}.pth")
+
+    block_pred_loss = torch.nn.CrossEntropyLoss(weight=create_loss_weights(datasets["occ_map"])).to(device)
+
     for epoch in range(args.epochs):
         log_message(f"=== Classification finetuning EPOCH {epoch+1}/{args.epochs} ===", "info")
         if args.dataset != "pdl1" and args.dataset != "coco":
@@ -190,8 +199,8 @@ if __name__ == "__main__":
                 cell_predictor=None,
                 device=device,
                 cell_mask=cell_mask,
-                patch_processer=patch_processor,
-                loss_fn=model_config["block_predictor_loss"],
+                block_processor=block_proc,
+                loss_fn=block_pred_loss,
                 cell_percentage=args.cell_percentage,
                 normal_mask=mask,
                 block_predictor=block_predictor
@@ -203,7 +212,7 @@ if __name__ == "__main__":
         torch.save(student_model.state_dict(), f"{result_folder}/trained_student_cls_{run_identifier}.pth")
         torch.save(teacher_model.state_dict(), f"{result_folder}/teacher_model_cls_{run_identifier}.pth")
         torch.save(predictor.state_dict(), f"{result_folder}/trained_predictor_cls_{run_identifier}.pth")
-        if args.dataset == "pdl1":
+        if args.dataset == "coco":
             torch.save(block_predictor.state_dict(), f"{result_folder}/trained_block_pred_{run_identifier}.pth")
 
     if args.dataset != "pdl1":

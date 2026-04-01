@@ -79,6 +79,7 @@ class ViTPredictor(nn.Module):
         ## x includes cls token on index 0
  
         B = x.size(0)
+        N_ctx = x.size(1)
         
         x = self.predictor_embed(x)
         
@@ -89,9 +90,7 @@ class ViTPredictor(nn.Module):
         block_cls_embeddings = self.target_block_cls.repeat(B, self.num_targets, 1)
         mask_tokens = mask_tokens + target_positions
         
-        context_tokens_repeated = x.repeat(target_positions.size(0) // x.size(0), 1, 1)
-        
-        x = torch.cat([context_tokens_repeated, mask_tokens], dim=1) # full predicted image with cls token on index 0
+        x = torch.cat([x, mask_tokens], dim=1) # full predicted image with cls token on index 0
 
         # run attention on whole image
         for block in self.pred_blocks:
@@ -99,12 +98,21 @@ class ViTPredictor(nn.Module):
 
         x = self.predictor_norm(x)
 
-        context_length = context_tokens_repeated.size(1)
+        predicted_tokens = x[:, N_ctx:]
 
-        predicted_tokens = x[:, context_length:]
+        print(f"patch per block sould be: {predicted_tokens.shape[1] // self.num_targets}")
 
         block_cls_tokens_raw = []
         for block in range(self.num_targets):
+            num_block_tokens = (predicted_tokens.shape[1] // self.num_targets)+1
+            print(num_block_tokens)
+            # positional embedding needed
+            # also verification, that the selected predicted block really is a predicted block
+            # so the selected start:end interval really is a target block, or just independent patch indices
+            block_pos_enc = sinusoidal_pos_embedding2d(num_block_tokens, predicted_tokens.shape[2], x.device)
+            print(block_pos_enc.shape)
+            block_pos_enc = block_pos_enc.repeat(B, 1, 1)
+            print(block_pos_enc.shape)
             block_end = int((block + 1) * (predicted_tokens.shape[1] / self.num_targets))
             block_start = int(((block + 1) * (predicted_tokens.shape[1] / self.num_targets)) - (predicted_tokens.shape[1] / self.num_targets))
 
@@ -114,7 +122,11 @@ class ViTPredictor(nn.Module):
 
             cls_extended = torch.cat([corresp_cls, batch_block], dim=1)
 
-            # TODO add optional multimodality for the current blocks label(s)
+            print(f"{(predicted_tokens.shape[1] // self.num_targets)+1} should match {cls_extended.shape}")
+            print(f"block pos enc shape is : {block_pos_enc.shape}, cls ext shape is")
+
+            cls_extended = cls_extended + block_pos_enc
+
             for att_block in self.pred_blocks:
                 cls_extended = att_block(cls_extended, None)
 
@@ -142,40 +154,6 @@ class ViTPredictor(nn.Module):
         block_cls_tokens_cat = torch.cat(block_cls_tokens_raw, dim=1)
 
         predicted_tokens = self.predictor_proj(predicted_tokens)
-
-        # only enter if model is ran in multimodal mode
-        # TODO only enter if GLOBAL multimodality is required
-        # if multimodal:
-            
-        #     label_list = [f"a photo of class: {label}" for label in labels]
-
-        #     label_tokens: dict[str, torch.Tensor] = self.tokenizer(label_list, return_tensors='pt', padding=True)
-
-        #     label_tokens = {k: v.to(self.device) for k, v in label_tokens.items()}
-            
-        #     enc_labels = self.text_encoder(**label_tokens, output_hidden_states=True)
-
-        #     enc_labels = enc_labels.hidden_states[-1]
-
-        #     num_masks = predicted_tokens.size(0) // B
-
-        #     enc_labels = enc_labels.unsqueeze(1).expand(-1, num_masks, -1, -1)
-        #     enc_labels = enc_labels.reshape(-1, enc_labels.size(2), enc_labels.size(3))
-
-        #     enc_labels = enc_labels.to(self.device)
-
-        #     enc_labels = self.label_to_embed(enc_labels)
-
-        #     pred_attended, _ = self.post_pred_mhsa(predicted_tokens, enc_labels, enc_labels)
-
-        #     predicted_tokens = predicted_tokens + pred_attended
-
-        if return_cls_only:
-            # full_img = torch.cat([x[:context_length], predicted_tokens], dim=1) ## create new total image embedding with finetuned target predictions -> not neccesary
-            # we only use the multimodal approach to the predicted target tokens, these do not affect the cls
-            # cls only learns the finetuned embedding by the multimodal learning iterations
-            cls_token = x[:, 0, :] # acquire cls token representing predicted image
-            return self.cls_head(cls_token)
         
         return predicted_tokens, block_cls_tokens_cat
 

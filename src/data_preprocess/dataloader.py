@@ -174,9 +174,10 @@ def load_dataset(dataset_name: str, input_folder: str = "", reverse: str = "n"):
         datasets["train_loader"] = train_loader
         datasets["test_loader"] = test_loader
     elif dataset_name == "coco":
-        train_loader, test_loader = load_coco_dataset(args.coco_train_folder, args.coco_train_annotation, reverse)
+        train_loader, test_loader, occ_map = load_coco_dataset(args.coco_train_folder, args.coco_train_annotation, reverse)
         datasets["train_loader"] = train_loader
         datasets["test_loader"] = test_loader
+        datasets["occ_map"] = occ_map
     else:
         datasets["error"] = "Dataset has not been registered yet for JEPA model!"
     return datasets
@@ -199,7 +200,7 @@ def load_coco_dataset(input_dir: str, annotation_json: str, reverse):
     train_loader = DataLoader(
         dataset=train_data,
         batch_size=args.batch_size,
-        shuffle=True,
+        shuffle=False,
         collate_fn=COCODataset.collate_fn
     )
     test_loader = DataLoader(
@@ -209,4 +210,4 @@ def load_coco_dataset(input_dir: str, annotation_json: str, reverse):
         collate_fn=COCODataset.collate_fn
     )
     
-    return train_loader, test_loader
+    return train_loader, test_loader, full_dataset_train.class_occ_map

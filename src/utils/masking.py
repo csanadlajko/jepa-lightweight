@@ -116,8 +116,8 @@ class Mask(object):
         patch_size=args.patch_size,
         nctx=1,
         ntarg=args.num_target,
-        targ_mask_scale=(0.01, 0.03),
-        ctx_mask_scale=(0.2, 0.8),
+        targ_mask_scale=(0.02, 0.05),
+        ctx_mask_scale=(0.2, 0.9),
         aspect_ratio=(0.75, 1.5),
         min_keep=4,
         max_tries=20
@@ -198,7 +198,7 @@ class Mask(object):
         idx = torch.randperm(H*W)[:max(self.min_keep, h*w // 2)]
         return idx, occ
     
-    def __call__(self, batch, id_only=True):
+    def __call__(self, batch, bbox_list=None, id_only=True):
         B = len(batch)
         if isinstance(batch, torch.Tensor):
             collated_batch = batch
@@ -215,16 +215,51 @@ class Mask(object):
         max_patch = self.width * self.height
         ctx_size = int(max_patch * 0.8)
 
-        for _ in range(B):
+        for b in range(B):
             occ = torch.zeros((self.height, self.width), dtype=torch.int32)
             
             target_mask = []
 
-            needed = max_patch-ctx_size
-            for _ in range(self.ntarg):
-                idx, occ = self._place_block_without_overlap(target_h, target_w, occ)
-                idx = idx.to(self.device)
-                target_mask.append(idx)
+            if bbox_list is not None and b < len(bbox_list):
+                bboxes = bbox_list[b]
+                centroids = []
+                for box in bboxes:
+                    x, y, w, h = box
+                    cx = int((x + w / 2) / self.patch_size)
+                    cy = int((y + h / 2) / self.patch_size)
+                    centroids.append((cx, cy))
+                if len(centroids) > self.ntarg:
+                    centroids = random.sample(centroids, self.ntarg)
+                elif len(centroids) < self.ntarg:
+                    for _ in range(self.ntarg - len(centroids)):
+                        cx = random.randint(0, self.width - 1)
+                        cy = random.randint(0, self.height - 1)
+                        centroids.append((cx, cy))
+            else:
+                centroids = None
+
+            needed = max_patch - ctx_size
+            for i in range(self.ntarg):
+                if centroids is not None and i < len(centroids):
+                    cx, cy = centroids[i]
+                    top = max(0, cy - target_h // 2)
+                    left = max(0, cx - target_w // 2)
+                    top = min(top, self.height - target_h)
+                    left = min(left, self.width - target_w)
+                else:
+                    top = torch.randint(0, self.height - target_h + 1, (1,)).item()
+                    left = torch.randint(0, self.width - target_w + 1, (1,)).item()
+                
+                cut_region = occ[top:top+target_h, left:left+target_w]
+                if torch.count_nonzero(cut_region) == 0:
+                    mask = torch.zeros((self.height, self.width), dtype=torch.int32)
+                    mask[top:top+target_h, left:left+target_w] = 1
+                    occ[top:top+target_h, left:left+target_w] = 1
+                    idx = torch.nonzero(mask.flatten(), as_tuple=False).squeeze()
+                    target_mask.append(idx.to(self.device))
+                else:
+                    idx, occ = self._place_block_without_overlap(target_h, target_w, occ)
+                    target_mask.append(idx.to(self.device))
             
             free = (occ == 0).to(torch.int32)
             

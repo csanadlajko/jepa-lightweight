@@ -27,7 +27,7 @@ def train_pdl1(
     total_loss = 0.0
     num_batches = 0
 
-    bar = tqdm(total=len(loader))
+    bar = tqdm(total=315)
 
     for i, (images, annotation) in enumerate(loader):
         ## annotation -> len(batch_size) list containing annotations for each image
@@ -50,7 +50,7 @@ def train_pdl1(
             int_labels.append(batch["labels"])
             string_labels.append(batch["string_labels"])
 
-        context_masks, target_masks = normal_mask(images)
+        context_masks, target_masks = normal_mask(images, batch_bbox_list)
         _, classes_string = block_proc(batch_bbox_list, target_masks, string_labels, int_labels)
 
         with torch.no_grad():
@@ -93,10 +93,13 @@ def train_pdl1(
         if i+1 % 100 == 0:
             print(f"current loss is: {loss_curr.item():.3f}")
         bar.update(1)
+        if i == 315:
+            break
 
     avg_loss = total_loss / num_batches if num_batches > 0 else 0.0
     bar.close()
     print(f"avg. training loss this epoch: {avg_loss:.4f}")
+    return avg_loss
 
 def train_cell_predictor(
         student_mod, 
@@ -120,9 +123,9 @@ def train_cell_predictor(
     num_batches = 0
     running_acc = 0.0
 
-    bar = tqdm(total=len(loader))
+    bar = tqdm(total=315)
 
-    for (images, annotation) in loader:
+    for i, (images, annotation) in enumerate(loader):
         ## annotation -> len(batch_size) list containing annotations for each image
         images = images.to(device)
 
@@ -145,7 +148,7 @@ def train_cell_predictor(
             int_labels.append(batch["labels"])
             string_labels.append(batch["string_labels"])
 
-        context_masks, target_masks = normal_mask(images)
+        context_masks, target_masks = normal_mask(images, batch_bbox_list)
         tens_int_classes, _ = block_processor(batch_bbox_list, target_masks, string_labels, int_labels)
 
         with torch.no_grad():
@@ -170,7 +173,7 @@ def train_cell_predictor(
         )
 
         # transform into [B*target_blocks, num_classes]
-        pred_classes_flat = pred_classes.view(-1, 91)
+        pred_classes_flat = pred_classes.view(-1, 81)
 
         # transform into [B*target_blocks]
         tens_int_flat = tens_int_classes.view(-1)
@@ -191,18 +194,21 @@ def train_cell_predictor(
         pred_labels = pred_classes_flat.argmax(dim=1)
         correct = (pred_labels == tens_int_flat)
         running_acc = correct.sum().item() / correct.numel()
-
+        if (i+1) % 100 == 0:
+            print(f"running acc is: {running_acc}")
         total_loss += loss_all.item()
         num_batches += 1
         # running_acc += accuracy
         bar.update(1)
+        if i == 315:
+            break
 
     avg_loss = total_loss / num_batches
     avg_acc = running_acc / num_batches
     print(f"=== running accuracy this cell prediction epoch: {avg_acc:.2f}% ===")
     print(f"=== avg loss this cell prediction epoch: {avg_loss:.4f} ===")
     bar.close()
-    return avg_loss, 0
+    return avg_loss, avg_acc
 
 def eval_cell_predictor(
         student_model,
