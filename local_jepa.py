@@ -2,7 +2,6 @@ from src.parser.parser import parse_jepa_args
 from src.models.vit import VisionTransformer
 from src.models.predictor import (
     ViTPredictor,
-    CellTypePredictor,
     BlockTypePredictor
 )
 import os
@@ -15,26 +14,25 @@ from src.train.train_ijepa import (
     eval_cls, # cls evalutaion on the test dataset
     show_topk_barchart
 )
-from train.train_local_jepa import (
-    train_local_jepa, # train JEPA model on PDL1 cell dataset
-    train_block_predictor, # finetune cell predictor FFN
+from src.train.train_local_jepa import (
+    train_local_jepa, # train JEPA model on COCO
+    train_block_predictor, # finetune block predictor
     eval_block_predictor # evaluate finetuned JEPA model
 )
 from src.data_preprocess.dataloader import load_dataset
 from src.utils.config_ijepa import get_model_config, init_weights, create_loss_weights
 from src.utils.masking import Mask, CellMask
 from src.utils.patch_metadata import PatchProcesser, BlockProcessor
-from src.utils.logging_module import log_message
+from src.utils.logging_module import logger
 from transformers import AutoTokenizer, AutoModelForCausalLM
 import torch
 import datetime
 import torch
-import json
 
 args = parse_jepa_args()
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
-log_message(f"Training will take place on device: {device}", "info")
+logger.info(f"Initializing models on device: {device}")
 
 mask = Mask(device=device)
 cell_mask = CellMask(device=device)
@@ -47,10 +45,12 @@ if __name__ == "__main__":
     run_identifier: str = datetime.datetime.now().strftime("%Y-%m-%dT%H%M%SZ")
     result_folder: str = args.result_folder
 
-    datasets = load_dataset(args.dataset, args.dataset_input, args.reverse_transform)
+    datasets = load_dataset(args.dataset, logger, args.dataset_input, args.reverse_transform)
 
     if "error" in datasets:
         raise FileNotFoundError(datasets["error"])
+    
+    logger.info("Dataset loaded successfully!")
 
     train_loader, test_loader = datasets["train_loader"], datasets["test_loader"]
 
@@ -63,7 +63,8 @@ if __name__ == "__main__":
         depth=args.depth,
         mlp_dim=args.mlp_dim,
         drop_rate=args.teacher_dropout,
-        num_classes=args.num_classes
+        num_classes=args.num_classes,
+        logger=logger
     ).to(device)
 
     student_model = VisionTransformer(
@@ -75,11 +76,14 @@ if __name__ == "__main__":
         depth=args.depth,
         mlp_dim=args.mlp_dim,
         drop_rate=args.student_dropout,
-        num_classes=args.num_classes
+        num_classes=args.num_classes,
+        logger=logger
     ).to(device)
 
+    logger.info("Loading pre-trained text tokenizer and encoder...")
     text_encoder = AutoModelForCausalLM.from_pretrained(args.sentence_encoder).to(device)
     tokenizer = AutoTokenizer.from_pretrained(args.sentence_encoder)
+    logger.info("Tokenizer and text encoder loaded successfully!")
 
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
@@ -94,16 +98,18 @@ if __name__ == "__main__":
         tokenizer=tokenizer,
         text_encoder=text_encoder,
         num_classes=args.num_classes,
-        num_targets=args.num_target
+        num_targets=args.num_target,
+        logger=logger
     ).to(device)
 
     patch_processor = PatchProcesser(
-        patch_size=args.patch_size
+        patch_size=args.patch_size,
+        logger=logger
     )
 
-    block_proc = BlockProcessor(args.patch_size, args.image_size)
+    block_proc = BlockProcessor(args.patch_size, args.image_size, logger=logger)
 
-    block_predictor = BlockTypePredictor(embed_dim=args.embed_dim, num_classes=args.num_block_categories).to(device)
+    block_predictor = BlockTypePredictor(embed_dim=args.embed_dim, num_classes=args.num_block_categories, logger=logger).to(device)
 
     teacher_model.apply(init_weights)
     student_model.apply(init_weights)
@@ -121,19 +127,18 @@ if __name__ == "__main__":
 
     student_scheduler = model_config["student_scheduler"]
 
-    log_message(
-        msg=f"total number of parameters approx.: {sum(p.numel() for p in student_model.parameters()) + sum(p.numel() for p in teacher_model.parameters()) + sum(p.numel() for p in predictor.parameters())}",
-        level="info"
+    logger.info(
+        f"total number of parameters approx.: {sum(p.numel() for p in student_model.parameters()) + sum(p.numel() for p in teacher_model.parameters()) + sum(p.numel() for p in predictor.parameters())}",
     )
 
     if args.multimodal_run == "y":
-        log_message(f"Starting training in MULTIMODAL mode for {args.epochs} epoch(s)!", "info")
+        logger.info(f"Starting training in MULTIMODAL mode for {args.epochs} epoch(s)!")
     else:
-        log_message(f"Starting training normal I-JEPA mode for {args.epochs} epoch(s)!", "info")
+        logger.info(f"Starting training normal I-JEPA mode for {args.epochs} epoch(s)!")
 
     for epoch in range(args.epochs):
 
-        log_message(f"=== EPOCH {epoch + 1}/{args.epochs} ===", "info")
+        logger.info(f"=== EPOCH {epoch + 1}/{args.epochs} ===")
 
         if args.dataset != "pdl1" and args.dataset != "coco":
             ## train JEPA on regular classification tasks with cls token
@@ -180,7 +185,7 @@ if __name__ == "__main__":
     block_pred_loss = torch.nn.CrossEntropyLoss().to(device)
 
     for epoch in range(args.epochs):
-        log_message(f"=== Classification finetuning EPOCH {epoch+1}/{args.epochs} ===", "info")
+        logger.info(f"=== Classification finetuning EPOCH {epoch+1}/{args.epochs} ===")
         if args.dataset != "pdl1" and args.dataset != "coco":
             cls_loss_at_epoch, accuracy_epoch = train_cls(
                 student_model=student_model,

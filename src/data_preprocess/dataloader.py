@@ -151,34 +151,41 @@ def get_cifar_tendotone_dataset(data_path: str, label_path: str):
     )
     return cifar101_test_loader
 
-def load_dataset(dataset_name: str, input_folder: str = "", reverse: str = "n"):
+def load_dataset(dataset_name: str, logger, input_folder: str = "", reverse: str = "n"):
     datasets = {}
     if dataset_name == "cifar10":
+        logger.info("Loading CIFAR-10 dataset...")
         train_loader, test_loader = get_cifarten_dataset(reverse)
         datasets["train_loader"] = train_loader
         datasets["test_loader"] = test_loader
     elif dataset_name == "cifar10dot1":
+        logger.info("Loading CIFAR-10.1 dataset...")
         train_loader, test_loader = get_cifar_tendotone_dataset(input_folder)
         datasets["train_loader"] = train_loader
         datasets["test_loader"] = test_loader
     elif dataset_name == "mri":
+        logger.info("Loading MRI dataset...")
         train_loader, test_loader = get_mri_dataset(input_folder, reverse)
         datasets["train_loader"] = train_loader
         datasets["test_loader"] = test_loader
     elif dataset_name == "lung-cancer":
+        logger.info("Loading lung cancer dataset...")
         train_loader, test_loader = get_lung_cancer_dataset(input_folder, reverse)
         datasets["train_loader"] = train_loader
         datasets["test_loader"] = test_loader
     elif dataset_name == "pdl1":
+        logger.info("Loading PD-L1 dataset...")
         train_loader, test_loader = get_pdl1_dataset(input_folder, args.annotation_path, reverse)
         datasets["train_loader"] = train_loader
         datasets["test_loader"] = test_loader
     elif dataset_name == "coco":
+        logger.info("Loading COCO dataset...")
         train_loader, test_loader, occ_map = load_coco_dataset(args.coco_train_folder, args.coco_train_annotation, reverse)
         datasets["train_loader"] = train_loader
         datasets["test_loader"] = test_loader
         datasets["occ_map"] = occ_map
     else:
+        logger.error("Provided dataset not found, throwing exception...")
         datasets["error"] = "Dataset has not been registered yet for JEPA model!"
     return datasets
 

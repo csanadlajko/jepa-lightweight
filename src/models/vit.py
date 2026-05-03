@@ -65,7 +65,7 @@ class TransformerEncoder(nn.Module):
     
 class VisionTransformer(nn.Module):
     
-    def __init__(self, img_size, patch_size, in_chans, embed_dim, num_heads, depth, mlp_dim, drop_rate, num_classes=None):
+    def __init__(self, img_size, patch_size, in_chans, embed_dim, num_heads, depth, mlp_dim, drop_rate, logger, num_classes=None):
         super().__init__()
         self.patch_embed = PatchEmbed(
             img_size=img_size,
@@ -82,6 +82,8 @@ class VisionTransformer(nn.Module):
             )
             for _ in range(depth)
         ])
+
+        self.logger = logger
         self.norm = nn.LayerNorm(embed_dim)
         
     def forward(self, x: torch.Tensor, masks=None, return_cls_only=False, cell_mask=False, cls=True):

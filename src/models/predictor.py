@@ -11,6 +11,7 @@ class ViTPredictor(nn.Module):
             num_patches,
             device,
             num_targets,
+            logger,
             embed_dim=256,
             pred_dim=None, 
             depth=6,
@@ -25,6 +26,8 @@ class ViTPredictor(nn.Module):
             pred_dim = embed_dim
         self.num_targets = num_targets
         self.num_patches = num_patches
+
+        self.logger = logger
 
         self.predictor_embed = nn.Linear(embed_dim, pred_dim, bias=True)
         self.mask_token = nn.Parameter(torch.zeros(1, 1, pred_dim), requires_grad=True) # learnable parameters to predict masked region
@@ -212,9 +215,9 @@ class CellTypePredictor(nn.Module):
 
 class BlockTypePredictor(nn.Module):
 
-    def __init__(self, num_classes=15, embed_dim=256, hidden_dim=128, dropout=0.1):
+    def __init__(self, logger, num_classes=15, embed_dim=256, hidden_dim=128, dropout=0.1):
         super().__init__()
-
+        self.logger = logger
         self.prediction_head = nn.Sequential(
             nn.Linear(embed_dim, hidden_dim),
             nn.GELU(),

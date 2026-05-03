@@ -74,8 +74,9 @@ class PatchProcesser(object):
         "1_2": 7 # negative and positive pdl1 cells
     }
 
-    def __init__(self, patch_size):
+    def __init__(self, patch_size, logger):
         self.patch_size = patch_size
+        self.logger = logger
 
     def _get_intersections(self, image_bboxes: list[list[int]], label_list: list[int], top_left_patch: tuple[int, int], bottom_right_patch: tuple[int, int]) -> int:
         assert len(image_bboxes) == len(label_list)
@@ -167,10 +168,11 @@ def get_block_class(all_patch_data: torch.Tensor, block_indices: torch.Tensor, b
 
 class BlockProcessor(object):
 
-    def __init__(self, patch_size, image_size):
+    def __init__(self, patch_size, image_size, logger):
         self.patch_size = patch_size
         self.image_size = image_size
         self.categ_map = self._convert_coco_classes()
+        self.logger = logger
 
     def _get_block_corner_coordinates(self, target_block: torch.Tensor) -> tuple[tuple[torch.Tensor, torch.Tensor], tuple[torch.Tensor, torch.Tensor]]:
         num_patches_per_side = self.image_size // self.patch_size
