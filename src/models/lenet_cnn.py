@@ -1,6 +1,6 @@
 import torch.nn as nn
 import torch
-from med_jepa import get_dataset
+from local_jepa import get_dataset
 from ..parser.parser import parse_jepa_args
 import matplotlib.pyplot as plt
 import datetime
