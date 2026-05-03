@@ -6,17 +6,18 @@ from src.models.predictor import (
     BlockTypePredictor
 )
 import os
-os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
 from src.train.train_ijepa import (
     train, # main JEPA training loop for creating the representational space
     train_cls, # CLS token supervised training loop
     show_cls_data_per_epoch, # cls accuracy plot
     show_loss_per_epoch, # cls loss plot
-    eval_cls # cls evalutaion on the test dataset
+    show_topk_accuracy,
+    eval_cls, # cls evalutaion on the test dataset
+    show_topk_barchart
 )
-from src.train.train_pdl1_mm_jepa import (
-    train_pdl1, # train JEPA model on PDL1 cell dataset
-    train_cell_predictor, # finetune cell predictor FFN
+from train.train_local_jepa import (
+    train_local_jepa, # train JEPA model on PDL1 cell dataset
+    train_block_predictor, # finetune cell predictor FFN
     eval_cell_predictor # evaluate finetuned JEPA model
 )
 from src.data_preprocess.dataloader import load_dataset
@@ -28,6 +29,7 @@ from transformers import AutoTokenizer, AutoModelForCausalLM
 import torch
 import datetime
 import torch
+import json
 
 args = parse_jepa_args()
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -128,7 +130,7 @@ if __name__ == "__main__":
         log_message(f"Starting training in MULTIMODAL mode for {args.epochs} epoch(s)!", "info")
     else:
         log_message(f"Starting training normal I-JEPA mode for {args.epochs} epoch(s)!", "info")
-    
+
     for epoch in range(args.epochs):
 
         log_message(f"=== EPOCH {epoch + 1}/{args.epochs} ===", "info")
@@ -136,9 +138,9 @@ if __name__ == "__main__":
         if args.dataset != "pdl1" and args.dataset != "coco":
             ## train JEPA on regular classification tasks with cls token
             loss_epoch = train(
-                teacher_mod=teacher_model, 
-                student_mod=student_model, 
-                loader=train_loader, 
+                teacher_mod=teacher_model,
+                student_mod=student_model,
+                loader=train_loader,
                 optim_student=model_config["optim_student"],
                 optim_predictor=model_config["optim_predictor"],
                 predictor=predictor,
@@ -150,11 +152,11 @@ if __name__ == "__main__":
                 debug=args.debug
             )
         else:
-            ## train JEPA on PDL1 dataset with local representation classification
-            loss_epoch = train_pdl1(
-                teacher_mod=teacher_model, 
-                student_mod=student_model, 
-                loader=train_loader, 
+            ## train JEPA on COCO with local representation classification
+            loss_epoch = train_local_jepa(
+                teacher_mod=teacher_model,
+                student_mod=student_model,
+                loader=train_loader,
                 optim_student=model_config["optim_student"],
                 optim_predictor=model_config["optim_predictor"],
                 predictor=predictor,
@@ -170,19 +172,23 @@ if __name__ == "__main__":
             student_scheduler.step()
         jepa_loss_per_epoch.append(loss_epoch)
 
-    if args.debug == "y":
-        torch.save(student_model.state_dict(), f"{result_folder}/trained_student_jepa_{run_identifier}.pth")
-        torch.save(teacher_model.state_dict(), f"{result_folder}/teacher_model_jepa_{run_identifier}.pth")
-        torch.save(predictor.state_dict(), f"{result_folder}/trained_predictor_jepa_{run_identifier}.pth")
+        if args.debug == "y" and (epoch+1) % 10 == 0:
+            torch.save(student_model.state_dict(), f"{result_folder}/trained_student_jepa_no_mm_{run_identifier}_{epoch+1}ep.pth")
+            torch.save(teacher_model.state_dict(), f"{result_folder}/teacher_model_jepa_no_mm_{run_identifier}_{epoch+1}ep.pth")
+            torch.save(predictor.state_dict(), f"{result_folder}/trained_predictor_jepa_no_mm_{run_identifier}_{epoch+1}ep.pth")
 
-    block_pred_loss = torch.nn.CrossEntropyLoss(weight=create_loss_weights(datasets["occ_map"])).to(device)
+    block_pred_loss = torch.nn.CrossEntropyLoss().to(device)
+    teacher_model.load_state_dict(torch.load("results/trained_models/teacher_model_cls_2026-04-15T081858Z_40ep.pth", weights_only=True))
+    predictor.load_state_dict(torch.load("results/trained_models/trained_predictor_cls_2026-04-15T081858Z_40ep.pth", weights_only=True))
+    student_model.load_state_dict(torch.load("results/trained_models/trained_student_cls_2026-04-15T081858Z_40ep.pth", weights_only=True))
+    block_predictor.load_state_dict(torch.load("results/trained_models/trained_block_pred_2026-04-15T081858Z_40ep.pth", weights_only=True))
 
     for epoch in range(args.epochs):
         log_message(f"=== Classification finetuning EPOCH {epoch+1}/{args.epochs} ===", "info")
         if args.dataset != "pdl1" and args.dataset != "coco":
             cls_loss_at_epoch, accuracy_epoch = train_cls(
-                student_model=student_model, 
-                train_dataset=train_loader, 
+                student_model=student_model,
+                train_dataset=train_loader,
                 predictor=predictor,
                 optim_cls=model_config["optim_cls"],
                 cls_loss=model_config["cls_loss"],
@@ -191,7 +197,7 @@ if __name__ == "__main__":
                 multimodal=False ## false in every case to prevent leakage !!
             )
         else:
-            cls_loss_at_epoch, accuracy_epoch = train_cell_predictor(
+            cls_loss_at_epoch, accuracy_epoch = train_block_predictor(
                 student_mod=student_model,
                 loader=train_loader,
                 optim_block_predictor=model_config["optim_block_predictor"],
@@ -203,22 +209,24 @@ if __name__ == "__main__":
                 loss_fn=block_pred_loss,
                 cell_percentage=args.cell_percentage,
                 normal_mask=mask,
-                block_predictor=block_predictor
+                block_predictor=block_predictor,
+                optim_student=model_config["optim_student"],
+                optim_main_pred=model_config["optim_predictor"]
             )
         accuracy_per_epoch.append(accuracy_epoch)
         cls_loss_per_epoch.append(cls_loss_at_epoch)
-    
-    if args.debug == "y":
-        torch.save(student_model.state_dict(), f"{result_folder}/trained_student_cls_{run_identifier}.pth")
-        torch.save(teacher_model.state_dict(), f"{result_folder}/teacher_model_cls_{run_identifier}.pth")
-        torch.save(predictor.state_dict(), f"{result_folder}/trained_predictor_cls_{run_identifier}.pth")
-        if args.dataset == "coco":
-            torch.save(block_predictor.state_dict(), f"{result_folder}/trained_block_pred_{run_identifier}.pth")
 
-    if args.dataset != "pdl1":
+        if args.debug == "y" and (epoch+1) % 10 == 0:
+            torch.save(student_model.state_dict(), f"{result_folder}/trained_student_cls_no_mm_{run_identifier}_{epoch+1}ep.pth")
+            torch.save(teacher_model.state_dict(), f"{result_folder}/teacher_model_cls_no_mm_{run_identifier}_{epoch+1}ep.pth")
+            torch.save(predictor.state_dict(), f"{result_folder}/trained_predictor_cls_no_mm_{run_identifier}_{epoch+1}ep.pth")
+            if args.dataset == "coco":
+                torch.save(block_predictor.state_dict(), f"{result_folder}/trained_block_pred_no_mm_{run_identifier}_{epoch+1}ep.pth")
+
+    if args.dataset != "pdl1" and args.dataset != "coco":
         cls_acc = eval_cls(
-            model=student_model, 
-            test_dataset=test_loader, 
+            model=student_model,
+            test_dataset=test_loader,
             predictor=predictor,
             device=device,
             mask=mask,
@@ -227,16 +235,15 @@ if __name__ == "__main__":
     else:
         cls_acc = eval_cell_predictor(
             student_model=student_model,
-            cell_predictor=cell_predictor,
             predictor=predictor,
             test_loader=test_loader,
             device=device,
-            cell_mask=cell_mask,
-            patch_processer=patch_processor,
-            loss_fn=model_config["cell_predictor_loss"],
-            cell_percentage=args.cell_percentage
+            normal_mask=mask,
+            block_predictor=block_predictor,
+            block_processor=block_proc
         )
 
-    show_loss_per_epoch(jepa_loss_per_epoch, cls_loss_per_epoch, run_identifier, result_folder)
-    show_cls_data_per_epoch(accuracy_per_epoch, run_identifier, result_folder)
-    print(f"-- CLS token classification accuracy: {cls_acc:.4f}")
+    print(f"Classification accuracy (map) is: {cls_acc}")
+    # show_topk_accuracy(accuracy_per_epoch, run_identifier, result_folder)
+    # show_loss_per_epoch(cls_loss_per_epoch, run_identifier, result_folder)
+    # show_cls_data_per_epoch(accuracy_per_epoch, run_identifier, result_folder)

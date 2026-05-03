@@ -3,7 +3,7 @@ import torch
 from ..utils.masking import apply_mask
 from ..utils.pos_encoding import sinusoidal_pos_embedding2d, sinusoidal_block_pos_embedding2d, get_block_size
 from .vit import TransformerEncoder
-
+ 
 class ViTPredictor(nn.Module):
 
     def __init__(
@@ -43,6 +43,16 @@ class ViTPredictor(nn.Module):
             for _ in range(depth)
         ])
 
+        self.target_block_transformer = nn.Sequential(*[
+            TransformerEncoder(
+                num_heads=num_heads,
+                embed_dim=pred_dim,
+                mlp_dim=256,
+                drop=drop_rate
+            )
+            for _ in range(depth)
+        ])
+
         self.label_to_embed = nn.Sequential(
             nn.Linear(384, pred_dim), ## depends on the embedding size of the text encoder
             nn.LayerNorm(pred_dim),
@@ -71,6 +81,7 @@ class ViTPredictor(nn.Module):
         self.post_pred_mhsa = nn.MultiheadAttention(pred_dim, num_heads, drop_rate, batch_first=True)
 
         self.predictor_norm = nn.LayerNorm(pred_dim)
+        self.block_cls_norm = nn.LayerNorm(embed_dim)
         self.predictor_proj = nn.Linear(pred_dim, embed_dim) # back to encoder dimension
 
         self.tokenizer = tokenizer
@@ -106,11 +117,8 @@ class ViTPredictor(nn.Module):
 
         predicted_tokens = x[:, N_ctx:]
 
-        print(f"patch per block sould be: {predicted_tokens.shape[1] // self.num_targets}")
-
         block_cls_tokens_raw = []
         for block in range(self.num_targets):
-            num_block_tokens = (predicted_tokens.shape[1] // self.num_targets)+1
             block_end = int((block + 1) * (predicted_tokens.shape[1] / self.num_targets))
             block_start = int(((block + 1) * (predicted_tokens.shape[1] / self.num_targets)) - (predicted_tokens.shape[1] / self.num_targets))
 
@@ -121,7 +129,7 @@ class ViTPredictor(nn.Module):
             cls_extended = torch.cat([corresp_cls, batch_block], dim=1)
             cls_extended = cls_extended + block_final_pos
 
-            for att_block in self.pred_blocks:
+            for att_block in self.target_block_transformer:
                 cls_extended = att_block(cls_extended, None)
 
             if local_cls:
@@ -146,6 +154,7 @@ class ViTPredictor(nn.Module):
         
         # should be a tensor with a shape [B, self.num_targets, embed_dim]
         block_cls_tokens_cat = torch.cat(block_cls_tokens_raw, dim=1)
+        block_cls_tokens_cat = self.block_cls_norm(block_cls_tokens_cat)
 
         predicted_tokens = self.predictor_proj(predicted_tokens)
         
@@ -170,6 +179,8 @@ class CellTypePredictor(nn.Module):
         :x predicted target patch embeddings with shape [B, N, D] where N is the (same) padded number of target patches in the batch
         :target_patch_indices list of length B containing lists of one index tensor each
         :gt_patch_classes ground-truth class labels for the target patches, shape [B, N] where N is the maximum number of patches in an image
+
+        depracated ... was used on the PD-L1 dataset
         """
         
         total_losses = []
@@ -206,7 +217,7 @@ class BlockTypePredictor(nn.Module):
 
         self.prediction_head = nn.Sequential(
             nn.Linear(embed_dim, hidden_dim),
-            nn.ReLU(),
+            nn.GELU(),
             nn.Dropout(dropout),
             nn.Linear(hidden_dim, num_classes)
         )
