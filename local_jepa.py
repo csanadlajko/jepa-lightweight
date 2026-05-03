@@ -4,15 +4,11 @@ from src.models.predictor import (
     ViTPredictor,
     BlockTypePredictor
 )
-import os
 from src.train.train_ijepa import (
     train, # main JEPA training loop for creating the representational space
     train_cls, # CLS token supervised training loop
-    show_cls_data_per_epoch, # cls accuracy plot
-    show_loss_per_epoch, # cls loss plot
-    show_topk_accuracy,
     eval_cls, # cls evalutaion on the test dataset
-    show_topk_barchart
+    
 )
 from src.train.train_local_jepa import (
     train_local_jepa, # train JEPA model on COCO
@@ -20,14 +16,13 @@ from src.train.train_local_jepa import (
     eval_block_predictor # evaluate finetuned JEPA model
 )
 from src.data_preprocess.dataloader import load_dataset
-from src.utils.config_ijepa import get_model_config, init_weights, create_loss_weights
+from src.utils.config_ijepa import get_model_config, init_weights
 from src.utils.masking import Mask, CellMask
 from src.utils.patch_metadata import PatchProcesser, BlockProcessor
 from src.utils.logging_module import logger
 from transformers import AutoTokenizer, AutoModelForCausalLM
 import torch
 import datetime
-import torch
 
 args = parse_jepa_args()
 device = "cuda" if torch.cuda.is_available() else "cpu"

@@ -2,7 +2,6 @@ import torch
 from ..utils.masking import apply_mask
 from ..utils.ema import _ema_update
 import torch.nn.functional as F
-from typing import Any
 from tqdm import tqdm
 from ..utils.patch_metadata import compute_weights
 

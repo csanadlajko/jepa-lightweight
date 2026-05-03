@@ -4,7 +4,6 @@ import torch
 import torch.nn.functional as F
 import datetime
 import matplotlib.pyplot as plt
-from torchviz import make_dot
 
 from tqdm import tqdm
 

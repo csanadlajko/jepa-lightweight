@@ -110,7 +110,7 @@ def train_unet(epochs: int, train_loader: DataLoader):
             imgs = imgs.to(unet_model.device)
             labels = labels.to(unet_model.device)
 
-            images = images.permute(0,3,2,1).float()
+            images = imgs.permute(0,3,2,1).float()
             labels = labels.permute(0,3,2,1).float()
             labels = labels.sum(1,keepdim=True).bool().float()
 

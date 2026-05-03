@@ -2,13 +2,13 @@ import torch
 import matplotlib.pyplot as plt
 import numpy as np
 from src.utils.masking import Mask
-from src.data_preprocess.dataloader import get_cifarten_dataset, get_pdl1_dataset, load_coco_dataset
+from src.data_preprocess.dataloader import load_coco_dataset
 from src.parser.parser import parse_jepa_args
 from src.utils.patch_metadata import BlockProcessor
 from src.models.predictor import ViTPredictor, BlockTypePredictor
 from src.models.vit import VisionTransformer
 from transformers import AutoTokenizer, AutoModelForCausalLM
-
+import json
 
 args = parse_jepa_args()
 
@@ -158,8 +158,6 @@ teacher_model.load_state_dict(torch.load("results/trained_models/multimodal/fine
 predictor.load_state_dict(torch.load("results/trained_models/multimodal/fine-tuned/predictor/trained_predictor_cls_2026-04-15T081858Z_40ep.pth", weights_only=True))
 student_model.load_state_dict(torch.load("results/trained_models/multimodal/fine-tuned/student/trained_student_cls_2026-04-15T081858Z_40ep.pth", weights_only=True))
 block_predictor.load_state_dict(torch.load("results/trained_models/multimodal/block-classifier/trained_block_pred_2026-04-15T081858Z_40ep.pth", weights_only=True))
-
-import json
 
 with open("src/data_preprocess/coco/categories.json") as f:
     categories = json.load(f)

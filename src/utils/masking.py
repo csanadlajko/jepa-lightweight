@@ -202,7 +202,8 @@ class Mask(object):
         B = len(batch)
         if isinstance(batch, torch.Tensor):
             collated_batch = batch
-        else: collated_batch = torch.utils.data.default_collate(batch)
+        else:
+            collated_batch = torch.utils.data.default_collate(batch)
         seed = self.step()
         g = torch.Generator()
         g.manual_seed(seed)
@@ -349,7 +350,7 @@ def apply_mask(x: torch.Tensor, mask_indices: list[torch.Tensor], predictor=Fals
                 else:
                     patch_idx = all_idx.to(x.device) ## dont shift when using predictor -> not predicting cls token
                 ## concat cls when working with context blocks otherwise only shift indices to right
-                if conc==True:
+                if conc:
                     indices = torch.cat([torch.tensor([0], device=x.device), patch_idx])
                 else:
                     indices = patch_idx

@@ -37,7 +37,7 @@ class PatchEmbed(nn.Module):
         B, C, H, W = x.shape # -> should be B - N (total_num_of_patches) - D (embed dim from conv2d) -> (16, 3, 128, 128)
         x = self.proj(x).flatten(2).transpose(1, 2) ## (16, 256, 8, 8) -> (16, 256, 64) -> (16, 64, 256)
         x = x + sinusoidal_pos_embedding2d(self.num_patches, self.embed_dim, x.device)
-        if cls==False:
+        if not cls:
             ## return if no cls token is needed
             return x
         x = torch.cat((torch.repeat_interleave(self.cls_token, B, dim=0), x), dim=1) # concat on dim 1: B,N,D -> B,N+1,D (cls token)
@@ -91,7 +91,7 @@ class VisionTransformer(nn.Module):
         attn_mask = None
         if masks is not None and not return_cls_only and not cell_mask:
             x, attn_mask = apply_mask(x, masks, predictor=True) # only needed when entering with student model
-        elif masks is not None and cell_mask == True:
+        elif masks is not None and cell_mask:
             ## used when pdl1 cell context mask is given
             x, attn_mask = apply_mask(x, masks, predictor=True, use_padding=True)
 
