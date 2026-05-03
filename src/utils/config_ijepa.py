@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-def get_model_config(student_model, predictor, learning_rate, epochs, cell_predictor, finetune_lr=0.005):
+def get_model_config(student_model, predictor, learning_rate, epochs, block_predictor, finetune_lr=0.005):
 
     optim_student = torch.optim.AdamW(
         student_model.parameters(),
@@ -21,8 +21,8 @@ def get_model_config(student_model, predictor, learning_rate, epochs, cell_predi
         weight_decay=0.05
     )
 
-    optim_cell_predictor = torch.optim.AdamW(
-        cell_predictor.parameters(),
+    optim_block_predictor = torch.optim.AdamW(
+        block_predictor.parameters(),
         lr=finetune_lr,
         weight_decay=0.05
     )
@@ -36,11 +36,11 @@ def get_model_config(student_model, predictor, learning_rate, epochs, cell_predi
         "optim_student": optim_student,
         "optim_cls": optim_cls,
         "optim_predictor": optim_predictor,
-        "optim_cell_predictor": optim_cell_predictor,
+        "optim_block_predictor": optim_block_predictor,
         "ijepa_loss": nn.MSELoss(),
         "cls_loss": nn.CrossEntropyLoss(),
         "student_scheduler": student_scheduler,
-        "cell_predictor_loss": nn.CrossEntropyLoss()
+        "block_predictor_loss": nn.CrossEntropyLoss()
     }
 
 def init_weights(model):
@@ -51,3 +51,12 @@ def init_weights(model):
     elif isinstance(model, nn.LayerNorm):
         torch.nn.init.ones_(model.weight)
         torch.nn.init.zeros_(model.bias)
+
+def create_loss_weights(occ_map):
+    sorted_categ = sorted([int(key) for key in occ_map.keys()])
+    sorted_occ = [occ_map[str(i)] for i in sorted_categ]
+    sorted_tens = torch.tensor(sorted_occ)
+    class_weights = 1.0 / (sorted_tens.float() + 1e-6)
+    class_weights = class_weights / class_weights.sum() * 90
+    extended = torch.cat([class_weights, class_weights[:1]])
+    return extended
