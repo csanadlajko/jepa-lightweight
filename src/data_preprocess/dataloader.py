@@ -12,7 +12,7 @@ args = parse_jepa_args()
 train_transform = transforms.Compose([
     transforms.Resize((args.image_size, args.image_size)),
     transforms.RandomInvert(0.3),
-    transforms.RandomHorizontalFlip(p=0.6),
+    # transforms.RandomHorizontalFlip(p=0.6),
     # transforms.RandomRotation(degrees=180),
     transforms.ColorJitter(brightness=0.3, contrast=0.3),
     transforms.GaussianBlur(kernel_size=3),
@@ -200,7 +200,7 @@ def load_coco_dataset(input_dir: str, annotation_json: str, reverse):
     train_loader = DataLoader(
         dataset=train_data,
         batch_size=args.batch_size,
-        shuffle=False,
+        shuffle=True,
         collate_fn=COCODataset.collate_fn
     )
     test_loader = DataLoader(

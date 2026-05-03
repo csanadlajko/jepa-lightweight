@@ -263,3 +263,9 @@ class BlockProcessor(object):
         assert tens_int_classes.shape[1] == len(batch_target_block[0])
 
         return tens_int_classes, total_data_string
+
+def compute_weights(targets_flat, num_classes=81):
+    counts = torch.bincount(targets_flat, minlength=num_classes).float()
+    weights = 1.0 / (counts + 1e-6)
+    weights = weights / weights.sum() * num_classes
+    return weights

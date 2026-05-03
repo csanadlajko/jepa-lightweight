@@ -170,13 +170,12 @@ def eval_cls(model,
     print(f"Final CLS accuracy: {final_accuracy:.4f}")
     return final_accuracy
 
-def show_loss_per_epoch(jepa_loss_epoch_list: list[int], cls_loss_per_epoch: list[int], run_id: str, result_folder: str):
-    epoch_list = range(1, len(jepa_loss_epoch_list) + 1)
+def show_loss_per_epoch(cls_loss_per_epoch: list[int], run_id: str, result_folder: str):
+    epoch_list = range(1, len(cls_loss_per_epoch) + 1)
     plt.figure(figsize=(8,5))
-    plt.plot(epoch_list, jepa_loss_epoch_list, label="MSE loss per JEPA epoch")
-    plt.plot(epoch_list, cls_loss_per_epoch, label="CE loss per CLS epochs")
+    plt.plot(epoch_list, cls_loss_per_epoch, label="CE loss per finetuning epochs")
     plt.xlabel('Epoch')
-    plt.ylabel('Loss (MSE)')
+    plt.ylabel('Loss (Cross-Entropy)')
     plt.title('Loss over epochs')
     plt.legend()
     plt.grid(True)
@@ -193,4 +192,34 @@ def show_cls_data_per_epoch(accuracy_per_epoch: list[int], run_id: str, result_f
     plt.legend()
     plt.grid(True)
     plt.savefig(f'{result_folder}/cls_accuracy_plot_{run_id}.png', dpi=300)
+    plt.show()
+
+def show_topk_accuracy(topk_acc: list[dict[str, float]], run_id: str, result_folder: str):
+    epoch_list = range(1, len(topk_acc) + 1)
+    top1 = [t["top1"] for t in topk_acc]
+    top2 = [t["top2"] for t in topk_acc]
+    top3 = [t["top3"] for t in topk_acc]
+    top4 = [t["top4"] for t in topk_acc]
+    top5 = [t["top5"] for t in topk_acc]
+    plt.figure(figsize=(8,5))
+    plt.plot(epoch_list, top1, label="Top-1 Accuracy", color="blue")
+    plt.plot(epoch_list, top2, label="Top-2 Accuracy", color="orange")
+    plt.plot(epoch_list, top3, label="Top-3 Accuracy", color="green")
+    plt.plot(epoch_list, top4, label="Top-4 Accuracy", color="red")
+    plt.plot(epoch_list, top5, label="Top-5 Accuracy", color="purple")
+    plt.xlabel("Epochs")
+    plt.ylabel("Top-k Accuracy")
+    plt.title("Top-k accuracy per epoch (%)")
+    plt.legend()
+    plt.grid()
+    plt.savefig(f'{result_folder}/topk_accuracy_{run_id}.png', dpi=300)
+    plt.show()
+
+def show_topk_barchart(topk_acc_dict: dict[str, float], result_folder: str, run_id: str, title: str, categories: list[str] = ["Top-1", "Top-2", "Top-3", "Top-4", "Top-5"]):
+    values: list[float] = [val for val in topk_acc_dict.values()]
+    plt.bar(categories, values, color=['#cfe8ff', '#9ecbff', '#6ea8ff', '#3b7dff', '#1f3fbf'], edgecolor="black")
+    plt.title(title)
+    plt.xlabel("Top-k accuracy categories")
+    plt.ylabel("Accuracy scores (%)")
+    plt.savefig(f'{result_folder}/topk_barchart_{run_id}.png', dpi=300)
     plt.show()
