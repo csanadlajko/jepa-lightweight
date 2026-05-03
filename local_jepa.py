@@ -18,7 +18,7 @@ from src.train.train_ijepa import (
 from train.train_local_jepa import (
     train_local_jepa, # train JEPA model on PDL1 cell dataset
     train_block_predictor, # finetune cell predictor FFN
-    eval_cell_predictor # evaluate finetuned JEPA model
+    eval_block_predictor # evaluate finetuned JEPA model
 )
 from src.data_preprocess.dataloader import load_dataset
 from src.utils.config_ijepa import get_model_config, init_weights, create_loss_weights
@@ -178,10 +178,6 @@ if __name__ == "__main__":
             torch.save(predictor.state_dict(), f"{result_folder}/trained_predictor_jepa_no_mm_{run_identifier}_{epoch+1}ep.pth")
 
     block_pred_loss = torch.nn.CrossEntropyLoss().to(device)
-    teacher_model.load_state_dict(torch.load("results/trained_models/teacher_model_cls_2026-04-15T081858Z_40ep.pth", weights_only=True))
-    predictor.load_state_dict(torch.load("results/trained_models/trained_predictor_cls_2026-04-15T081858Z_40ep.pth", weights_only=True))
-    student_model.load_state_dict(torch.load("results/trained_models/trained_student_cls_2026-04-15T081858Z_40ep.pth", weights_only=True))
-    block_predictor.load_state_dict(torch.load("results/trained_models/trained_block_pred_2026-04-15T081858Z_40ep.pth", weights_only=True))
 
     for epoch in range(args.epochs):
         log_message(f"=== Classification finetuning EPOCH {epoch+1}/{args.epochs} ===", "info")
@@ -233,7 +229,7 @@ if __name__ == "__main__":
             multimodal=False ## false in every case to prevent leakage !!
         )
     else:
-        cls_acc = eval_cell_predictor(
+        cls_acc = eval_block_predictor(
             student_model=student_model,
             predictor=predictor,
             test_loader=test_loader,
