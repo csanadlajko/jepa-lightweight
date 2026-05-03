@@ -1,0 +1,21 @@
+name: JEPA CI pipeline
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    container:
+      image: csanadl/jepalinter:latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Linter pipeline
+        run: ruff check .
+
