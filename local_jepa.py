@@ -238,8 +238,7 @@ if __name__ == "__main__":
             block_predictor=block_predictor,
             block_processor=block_proc
         )
-
-    print(f"Classification accuracy (map) is: {cls_acc}")
+    logger.info(f"Classification accuracy (map) is: {cls_acc}")
     # show_topk_accuracy(accuracy_per_epoch, run_identifier, result_folder)
     # show_loss_per_epoch(cls_loss_per_epoch, run_identifier, result_folder)
     # show_cls_data_per_epoch(accuracy_per_epoch, run_identifier, result_folder)

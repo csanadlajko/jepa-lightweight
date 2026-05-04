@@ -66,7 +66,7 @@ def train(teacher_mod,
         bar.update(1)
     
     avg_loss = total_loss / num_batches if num_batches > 0 else 0.0
-    print(f"Average training loss: {avg_loss:.4f}")
+    teacher_mod.logger.info(f"Average training loss: {avg_loss:.4f}")
 
     bar.close()
 
@@ -125,7 +125,7 @@ def train_cls(student_model,
 
     current_acc = correct_predictions / total_predictions
     avg_loss = total_loss / num_batches if num_batches > 0 else 0.0
-    print(f"Average CLS training loss: {avg_loss:.4f}")
+    student_model.logger.info(f"Average CLS training loss: {avg_loss:.4f}")
 
     bar.close()
 
@@ -166,7 +166,7 @@ def eval_cls(model,
             
     bar.close()
     final_accuracy = total_correct / total_samples
-    print(f"Final CLS accuracy: {final_accuracy:.4f}")
+    predictor.logger.info(f"Final CLS accuracy: {final_accuracy:.4f}")
     return final_accuracy
 
 def show_loss_per_epoch(cls_loss_per_epoch: list[int], run_id: str, result_folder: str):

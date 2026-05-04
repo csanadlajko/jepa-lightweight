@@ -33,14 +33,6 @@ def train_local_jepa(
         ## annotation -> len(batch_size) list containing annotations for each image
         images = images.to(device)
 
-        ## acquire context and target cell masks for current batch (patch indices)
-        ## size: len(batch)
-        # mask_meta = cell_mask(cell_percentage, annotation)
-
-        # target_mask_indices = mask_meta["target_patch_indices"]
-        # context_mask_indices = mask_meta["context_patch_indices"]
-        # target_patch_labels = mask_meta["target_patch_labels"]
-        # context_patch_labels = mask_meta["context_patch_labels"]
         batch_bbox_list = []
         int_labels = []
         string_labels = []
@@ -59,11 +51,11 @@ def train_local_jepa(
             teacher_tokens = F.layer_norm(teacher_tokens, (teacher_tokens.size(-1),))
             # target tokens are padded to the longest target list in the batch!!
             # [B, N] corresponding attention mask is given
-            teacher_target_tokens, teacher_attn_mask = apply_mask(teacher_tokens, target_masks, predictor=True)
+            teacher_target_tokens, _ = apply_mask(teacher_tokens, target_masks, predictor=True)
 
         ## create context student tokens
         # student tokens are padded as well to the larges context mask index list
-        student_tokens, student_attn_mask = student_mod(images, masks=context_masks, cls=False)
+        student_tokens, _ = student_mod(images, masks=context_masks, cls=False)
 
         predicted_target_tokens, _ = predictor(
             student_tokens, 
@@ -90,15 +82,13 @@ def train_local_jepa(
         
         total_loss += loss_curr.item()
         num_batches += 1
-        # if (i+1) % 100 == 0:
-        #     print(f"current loss at batch {i}: {loss_curr.item():.3f}")
         bar.update(1)
         if i == 315:
             break
 
     avg_loss = total_loss / num_batches if num_batches > 0 else 0.0
     bar.close()
-    print(f"avg. training loss this epoch: {avg_loss:.4f}")
+    teacher_mod.logger.info(f"Average training loss this epoch: {avg_loss:.4f}")
     return avg_loss
 
 def train_block_predictor(
@@ -199,9 +189,8 @@ def train_block_predictor(
                 tens_int_flat_exp = tens_int_flat.view(-1, 1)
                 correct_topk = (topk_preds == tens_int_flat_exp).any(dim=1)
                 topk_acc = correct_topk.float().mean().item()
-                print(f"top k acc at k={k} is {topk_acc*100:.2f}")
+                student_mod.logger.info(f"top k acc at k={k} is {topk_acc*100:.2f}")
                 epoch_topk_map[f"top{k}"] += topk_acc*100
-            print(f"running acc at batch {i}: {curr_acc*100:.2f}")
         total_loss += loss_all.item()
         num_batches += 1
         running_acc += curr_acc
@@ -213,8 +202,8 @@ def train_block_predictor(
         epoch_topk_map[key] = epoch_topk_map[key] / num_batches
     avg_loss = total_loss / num_batches
     avg_acc = (running_acc / num_batches)*100
-    print(f"=== running accuracy this cell prediction epoch: {avg_acc:.2f}% ===")
-    print(f"=== avg loss this cell prediction epoch: {avg_loss:.4f} ===")
+    student_mod.logger.info(f"=== running accuracy this cell prediction epoch: {avg_acc:.2f}% ===")
+    student_mod.logger.info(f"=== avg loss this cell prediction epoch: {avg_loss:.4f} ===")
     bar.close()
     return avg_loss, epoch_topk_map
 
@@ -294,7 +283,7 @@ def eval_block_predictor(
         num_batches += 1
         if (i+1) % 200 == 0:
             for key in running_acc_map.keys():
-                print(f"running accuracy for {key} is: {running_acc_map[key] / num_batches * 100}%")
+                predictor.logger.info(f"running accuracy for {key} is: {running_acc_map[key] / num_batches * 100}%")
 
         bar.update(1)
     for key in running_acc_map.keys():
